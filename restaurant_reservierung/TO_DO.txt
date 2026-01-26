@@ -1,0 +1,7 @@
+Besseres Frontend
+Mehrere Geräte anmeldbar
+Hotelzimmer edition
+(dark mode)
+sprachen
+kollision mit tisch wenn gast gegangen
+datenbank???

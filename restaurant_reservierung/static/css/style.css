@@ -1,0 +1,606 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f7f6;
+    color: #333333;
+    line-height: 1.6;
+}
+.container-main {
+    width: 90%;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+header {
+    background-color: #2c3e50;
+    color: #ecf0f1;
+    padding: 1em 0;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.header-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 90%;
+    max-width: 1200px;
+    margin: 0 auto;
+    position: relative;
+}
+#header-logo {
+    height: 50px;
+    width: auto;
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+}
+header h1 {
+    margin: 0;
+    font-size: 2.0em;
+    font-weight: 300;
+}
+nav {
+    text-align: center;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #3e5771;
+}
+nav ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+nav ul li {
+    display: inline;
+    margin-right: 20px;
+}
+nav ul li:last-child {
+    margin-right: 0;
+}
+nav ul li a {
+    color: #bdc3c7;
+    text-decoration: none;
+    font-weight: bold;
+    transition: color 0.3s ease;
+    padding: 10px 15px;
+    display: inline-block;
+}
+nav ul li.active-nav-item a {
+    color: #ffffff;
+}
+nav ul li a:hover,
+nav ul li a.active {
+    color: #ffffff;
+}
+main {
+    min-height: calc(100vh - 220px);
+    padding: 20px 0;
+}
+.filter-controls {
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    background-color: #fff;
+    border-radius: 6px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.07);
+}
+.filter-controls div {
+    display: flex;
+    align-items: center;
+}
+.filter-controls label {
+    font-weight: bold;
+    margin-right: 8px;
+    color: #495057;
+}
+.filter-controls input[type="date"],
+.filter-controls select {
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 0.9px solid #ced4da;
+    font-size: 0.95em;
+    margin-left: 5px;
+}
+.controls-divider {
+    border: none;
+    border-top: 1px solid #e0e0e0;
+    margin-bottom: 25px;
+}
+.area-section {
+    margin-bottom: 40px;
+    padding: 25px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.area-section h2 {
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 10px;
+    margin-top: 0;
+    margin-bottom: 25px;
+    color: #2c3e50;
+    font-size: 1.8em;
+    font-weight: 400;
+}
+.table-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 20px;
+}
+.table-item {
+    border: 1px solid #e0e0e0;
+    padding: 10px;
+    border-radius: 6px;
+    text-align: left;
+    background-color: #f9f9f9;
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    display: flex;
+    flex-direction: column;
+    min-height: 100px;
+    overflow: hidden;
+    word-break: break-word;
+}
+.table-item:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+}
+.table-item strong {
+    display: block;
+    font-size: 1.1em;
+    margin-bottom: 8px;
+    color: #34495e;
+}
+.table-item p.status-paragraph {
+    margin: 2px 0;
+    font-size: 0.95em;
+    color: #555555;
+}
+.reservations-summary {
+    margin-top: auto;
+    font-size: 0.8em;
+    padding-top: 5px;
+    border-top: 1px dashed #eee;
+    margin-top: 5px;
+    line-height: 1.3;
+}
+
+.reservation-entry {
+    margin: 1px 0;
+    padding: 1px 0;
+    font-size: 0.85em;
+}
+.reservation-entry.guest-has-arrived {
+}
+.arrival-status-indicator {
+    font-size: 0.9em;
+    margin-left: 5px;
+    font-weight: bold;
+}
+.status-text {
+    font-weight: bold;
+}
+.table-item.status-frei strong,
+.table-item.status-frei .status-text {
+    color: #27ae60;
+}
+.table-item.status-belegt {
+    background-color: #ffebee;
+    border-color: #f5c6cb;
+}
+.table-item.status-belegt strong,
+.table-item.status-belegt .status-text {
+    color: #c62828;
+}
+.table-item.guest-arrived-on-table {
+}
+.garden-row {
+    margin-bottom: 25px;
+}
+.garden-row:last-child {
+    margin-bottom: 0;
+}
+.garden-row .garden-row-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 8px;
+}
+.bar-subsection {
+    margin-bottom: 20px;
+}
+.bar-subsection h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+    color: #555;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+}
+.table-item.bar-stool-item {
+    border-radius: 6px;
+}
+.table-item.bar-stool-item strong {
+    font-size: 0.85em;
+    margin-bottom: 0;
+    text-align: center;
+}
+.table-item.bar-stool-item p.status-paragraph,
+.table-item.bar-stool-item .reservations-summary {
+    display: none;
+}
+.no-tables-message {
+    padding: 20px;
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
+    border-radius: 5px;
+    text-align: center;
+}
+footer {
+    text-align: center;
+    margin-top: 40px;
+    padding: 25px 0;
+    border-top: 1px solid #e0e0e0;
+    font-size: 0.9em;
+    color: #7f8c8d;
+    background-color: #ecf0f1;
+}
+.footer-container {
+    width: 90%;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+.button {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #3498db;
+    color: white;
+    text-decoration: none;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    font-size: 1em;
+    text-align: center;
+}
+.button:hover {
+    background-color: #2980b9;
+}
+.button-delete {
+    background-color: #e74c3c;
+    color: white;
+}
+.button-delete:hover {
+    background-color: #c0392b;
+}
+.button-success {
+    background-color: #2ecc71;
+    color: white;
+}
+.button-success:hover {
+    background-color: #27ae60;
+}
+.button-cancel {
+    background-color: #95a5a6;
+    color: white;
+}
+.button-cancel:hover {
+    background-color: #7f8c8d;
+}
+.text-center {
+    text-align: center;
+}
+.reservation-form-container {
+    max-width: 600px;
+    margin: 20px auto;
+    padding: 25px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.reservation-form-container h2 {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 25px;
+    color: #2c3e50;
+}
+.form-group {
+    margin-bottom: 20px;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #34495e;
+}
+.form-group input[type="text"],
+.form-group input[type="time"],
+.form-group input[type="number"],
+.form-group input[type="date"],
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #dcdcdc;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 1em;
+}
+.form-group input[type="text"]:focus,
+.form-group input[type="time"]:focus,
+.form-group input[type="number"]:focus,
+.form-group input[type="date"]:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+    border-color: #3498db;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+.form-group textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+.form-actions {
+    text-align: right;
+    margin-top: 30px;
+}
+.selected-table-info {
+    background-color: #e9f5e9;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    border: 1px solid #c8e6c9;
+    color: #2e7d32;
+}
+.confirmation-message {
+    padding: 20px;
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+    border-radius: 5px;
+    text-align: center;
+    margin-top: 20px;
+}
+.error-message {
+    padding: 20px;
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+    border-radius: 5px;
+    text-align: center;
+    margin-top: 20px;
+}
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1050;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+.modal-overlay.active {
+    display: flex;
+    opacity: 1;
+    visibility: visible;
+}
+.modal-content {
+    background-color: #fff;
+    padding: 25px 30px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    min-width: 320px;
+    max-width: 500px;
+    text-align: center;
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+}
+.modal-overlay.active .modal-content {
+    transform: scale(1);
+}
+.modal-content h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #2c3e50;
+    font-size: 1.4em;
+}
+.modal-content p {
+    margin-bottom: 25px;
+    color: #555;
+    line-height: 1.6;
+    font-size: 1em;
+    text-align: left;
+}
+.modal-actions {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 20px;
+}
+.modal-actions .button {
+    min-width: 120px;
+}
+.modal-actions .button-delete-confirm {
+    background-color: #e74c3c;
+    color: white;
+}
+.modal-actions .button-delete-confirm:hover {
+    background-color: #c0392b;
+}
+.modal-status-message .confirmation-message,
+.modal-status-message .error-message {
+    margin-top: 0;
+}
+.modal-status-message .confirmation-message h3,
+.modal-status-message .error-message h3 {
+    text-align: center;
+}
+.modal-close-button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    font-size: 1.8em;
+    font-weight: bold;
+    color: #aaa;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+.modal-close-button:hover {
+    color: #333;
+}
+#occupiedTableModalMessageArea p {
+    margin-bottom: 10px;
+}
+#occupiedTableModalDetails strong {
+    display: inline-block;
+    min-width: 80px;
+}
+#availableTablesForMoveList .available-table-item {
+    padding: 8px;
+    margin-bottom: 5px;
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+#availableTablesForMoveList .available-table-item:hover {
+    background-color: #e9e9e9;
+}
+#availableTablesForMoveList p {
+    color: #777;
+    font-style: italic;
+}
+.header-content h1#page-header-title {
+    margin: 0;
+    font-size: 1.8em;
+    font-weight: 300;
+    flex-grow: 1;
+    text-align: left;
+}
+#current-datetime-display {
+    font-size: 1.25em;
+    color: #ecf0f1;
+    text-align: right;
+    min-width: 160px;
+    line-height: 1.3;
+}
+.reservations-table .button-arrival.pending-arrival {
+    background-color: #1e8449;
+    color: white;
+}
+.reservations-table .button-arrival.pending-arrival:hover {
+    background-color: #145A32;
+}
+.reservations-table .button-arrival.arrived {
+    background-color: #2ecc71;
+    color: white;
+}
+.reservations-table .button-arrival.arrived:hover {
+    background-color: #27ae60;
+}
+.reservations-table tr.guest-arrived td {
+}
+.reservations-table tr.guest-arrived:nth-child(even) td,
+.reservations-table tr.guest-arrived:nth-child(odd) td {
+     background-color: rgba(46, 204, 113, 0.2);
+}
+.reservations-table tr.guest-arrived:hover td {
+    background-color: rgba(46, 204, 113, 0.3);
+}
+.reservations-table tr.guest-departed-row td {
+    opacity: 0.7;
+    text-decoration: line-through;
+    color: #6c757d;
+}
+.reservations-table tr.guest-departed-row td:not(.actions-cell) {
+    text-decoration: line-through;
+    color: #6c757d;
+}
+.reservations-table th, .reservations-table td {
+    border: 1px solid #ddd;
+    padding: 4px 8px;
+    text-align: left;
+    vertical-align: middle;
+}
+.reservations-table tr.guest-departed-row .actions-cell button:not(.button-status-departed) {
+}
+.area-divider {
+    border: none;
+    border-top: 1px solid #e9ecef;
+    margin-top: 15px;
+    margin-bottom: 15px;
+}
+.table-item.bar-stool-item strong {
+    font-size: 0.85em;
+    margin-bottom: 0;
+    text-align: center;
+}
+.guest-has-departed-entry {
+    opacity: 0.6;
+}
+.departure-status-indicator, .arrival-status-indicator {
+    font-size: 0.9em;
+    margin-left: 5px;
+}
+.reservations-table .col-date,
+.reservations-table .col-time,
+.reservations-table .col-persons,
+.reservations-table .col-status {
+    white-space: nowrap;
+}
+.reservations-table .col-date   { min-width: 95px; }
+.reservations-table .col-time   { min-width: 70px; }
+.reservations-table .col-persons{ min-width: 75px; text-align: center; }
+.reservations-table .col-status { min-width: 90px; }
+.reservations-table .col-name,
+.reservations-table .col-table,
+.reservations-table .col-info {
+    overflow-wrap: break-word;
+    word-break: break-word;
+    hyphens: auto;
+}
+.reservations-table .col-actions {
+    min-width: 280px;
+}
+.reservations-table {
+    table-layout: fixed;
+    width: 100%;
+}
+.reservations-table td {
+    line-height: 1.4;
+}
+.reservations-table td {
+    font-size: 1m;
+}
+.reservations-table th {
+    font-size: 1em;
+}
+.filter-controls .button.button-secondary {
+    padding: 6px 10px;
+    font-size: 0.85em;
+}
+.status-paragraph .status-text-frei {
+    color: #27ae60;
+    font-weight: bold;
+}
+.status-paragraph .status-text-belegt {
+    color: #c0392b;
+    font-weight: bold;
+}
+.status-paragraph .status-text-reserviert {
+    color: #f39c12;
+    font-weight: bold;
+}

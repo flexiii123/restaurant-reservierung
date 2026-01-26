@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Anmeldung - Restaurant Adler{% endblock %}
+{% block page_header_title %}Mitarbeiter-Login{% endblock %}
+
+{% block content %}
+<div class="reservation-form-container" style="max-width: 400px; margin-top: 50px;">
+    <h2>Anmeldung</h2>
+
+    {% if error %}
+        <div class="error-message" style="margin-bottom: 20px;">
+            <p>{{ error }}</p>
+        </div>
+    {% endif %}
+
+    <form method="POST">
+        <div class="form-group">
+            <label for="username">Benutzername:</label>
+            <input type="text" id="username" name="username" required autofocus>
+        </div>
+
+        <div class="form-group">
+            <label for="password">Passwort:</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+
+        <div class="form-actions" style="text-align: center;">
+            <button type="submit" class="button button-success" style="width: 100%;">Anmelden</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,619 @@
+{% extends "base.html" %}
+
+{% block page_header_title %}Reservierungsverwaltung{% endblock %}
+
+{% block title %}Reservierungsübersicht{% endblock %}
+
+{% block content %}
+<style>
+    .management-header {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+    gap: 20px;
+    }
+
+    .management-header h2 {
+        margin: 0;
+        color: #2c3e50;
+        flex-grow: 0;   /* Der Titel soll nicht wachsen, um Platz zu füllen */
+        flex-shrink: 1; /* Der Titel darf schrumpfen, wenn nötig */
+        /* text-overflow: ellipsis; /* Optional: Wenn der Titel zu lang wird, mit "..." abschneiden */
+        /* white-space: nowrap; */   /* Benötigt für ellipsis */
+        /* overflow: hidden; */      /* Benötigt für ellipsis */
+    }
+
+    .filter-controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-left: auto; /* Schiebt die Filter-Controls ganz nach rechts */
+    }
+    .filter-controls label { font-weight: bold; color: #495057; }
+    .filter-controls input[type="date"], .filter-controls button { padding: 8px 12px; border-radius: 4px; border: 1px solid #ced4da; font-size: 0.9em; }
+    .filter-controls button { background-color: #3498db; color: white; cursor: pointer; }
+    .filter-controls button:hover { background-color: #2980b9; }
+    .filter-controls .button-secondary { background-color: #95a5a6; }
+    .filter-controls .button-secondary:hover { background-color: #7f8c8d; }
+    .reservations-table { width: 100%; border-collapse: collapse; margin-top: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); background-color: #fff; }
+    .reservations-table th, .reservations-table td { border: 1px solid #ddd; padding: 10px 12px; text-align: left; vertical-align: middle; }
+    .reservations-table th { background-color: #f2f2f2; color: #333; font-weight: bold; }
+    .reservations-table tr:nth-child(even) { background-color: #f9f9f9; }
+    .reservations-table tr:hover { background-color: #f1f1f1; }
+    .reservations-table .actions-cell button { margin-right: 5px; margin-bottom: 5px; padding: 5px 10px; font-size: 0.85em; }
+    .reservations-table .button-edit { background-color: #f1c40f; color: #333;}
+    .reservations-table .button-edit:hover { background-color: #f39c12; }
+    .reservations-table .button-move { background-color: #3498db; }
+    .reservations-table .button-move:hover { background-color: #2980b9; }
+    .no-reservations { text-align: center; padding: 20px; background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; border-radius: 5px; margin-top: 20px; }
+    #availableTablesForMoveList .available-table-item { padding: 8px; margin-bottom: 5px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; transition: background-color 0.2s ease; }
+    #availableTablesForMoveList .available-table-item:hover { background-color: #e9e9e9; }
+    #availableTablesForMoveList p { color: #777; font-style: italic; }
+    .button-success { background-color: #2ecc71; color: white; }
+    .button-success:hover { background-color: #27ae60; }
+    .button-mark-departed { background-color: #e67e22; color: white; }
+    .button-mark-departed:hover { background-color: #d35400; }
+    .button-status-departed { background-color: #95a5a6; color: #ecf0f1; cursor: not-allowed; }
+    .guest-departed-row td { opacity: 0.7; }
+    .status-text-arrived { color: green; font-weight: bold; }
+    .status-text-departed { color: grey; font-style: italic; }
+    .status-text-pending { color: #7f8c8d; }
+    .filter-controls select {
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 0.9px solid #ced4da;
+    font-size: 0.95em;
+    margin-left: 5px;
+}
+</style>
+
+<div class="management-header">
+    <h2>{{ page_title }}</h2>
+    <div class="filter-controls">
+        <form id="filterForm" method="GET" action="{{ url_for('reservations_list_page') }}" style="display: flex; gap: 10px; align-items: center;">
+            <label for="filterDate">Datum:</label>
+            <input type="date" id="filterDate" name="filter_date" value="{{ active_filter_date or '' }}" min="{{ min_filter_date or '' }}">
+            <label for="filterShift" style="margin-left: 15px;">Schicht:</label>
+            <select id="filterShift" name="shift">
+                {% for shift_val in available_shifts %}
+                <option value="{{ shift_val }}" {% if shift_val == current_filter_shift %}selected{% endif %}>
+                    {{ shift_val|capitalize }}
+                </option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="button">Filtern</button>
+            <a href="{{ url_for('reservations_list_page', filter_date='', shift=current_filter_shift) }}" class="button button-secondary button-show-all">Alle anzeigen</a>
+        </form>
+    </div>
+</div>
+
+
+{% if reservations and reservations|length > 0 %}
+    <table class="reservations-table">
+        <thead>
+            <tr>
+                <th>
+                    <a href="{{ url_for('reservations_list_page', filter_date=active_filter_date, shift=current_filter_shift, sort_by='name', order=next_sort_order.name) }}">
+                        Name
+                        {% if current_sort_by == 'name' %} <span class="sort-indicator">{{ '▲' if current_sort_order == 'asc' else '▼' }}</span> {% endif %}
+                    </a>
+                </th>
+                <th>
+                    <a href="{{ url_for('reservations_list_page', filter_date=active_filter_date, shift=current_filter_shift, sort_by='table_display_name', order=next_sort_order.table_display_name) }}">
+                        Tisch
+                        {% if current_sort_by == 'table_display_name' %} <span class="sort-indicator">{{ '▲' if current_sort_order == 'asc' else '▼' }}</span> {% endif %}
+                    </a>
+                </th>
+                <th>
+                    <a href="{{ url_for('reservations_list_page', filter_date=active_filter_date, shift=current_filter_shift, sort_by='date', order=next_sort_order.date) }}">
+                        Datum
+                        {% if current_sort_by == 'date' %}
+                            <span class="sort-indicator">{{ '▲' if current_sort_order == 'asc' else '▼' }}</span>
+                        {% endif %}
+                    </a>
+                </th>
+                <th>
+                     <a href="{{ url_for('reservations_list_page', filter_date=active_filter_date, shift=current_filter_shift, sort_by='time', order=next_sort_order.time) }}">
+                        Uhrzeit
+                        {% if current_sort_by == 'time' %} <span class="sort-indicator">{{ '▲' if current_sort_order == 'asc' else '▼' }}</span> {% endif %}
+                    </a>
+                </th>
+                <th>
+                    <a href="{{ url_for('reservations_list_page', filter_date=active_filter_date, shift=current_filter_shift, sort_by='persons', order=next_sort_order.persons) }}">
+                        Personen
+                        {% if current_sort_by == 'persons' %} <span class="sort-indicator">{{ '▲' if current_sort_order == 'asc' else '▼' }}</span> {% endif %}
+                    </a>
+                </th>
+                <th>Info</th>
+                <th>Status</th>
+                <th>Aktionen</th>
+            </tr>
+        </thead>
+            <tbody>
+                {% for res in reservations %}
+                <tr class="reservation-row {% if res.arrived and not res.departed %}guest-arrived{% elif res.departed %}guest-departed-row{% endif %}" data-row-id="{{ res.id }}">
+                    <td>{{ res.name | e }}</td>
+                    <td>{{ (res.table_display_name or res.table_id) | e }}</td>
+                    <td>{{ res.display_date }}</td>
+                    <td>{{ res.time | e }}</td>
+                    <td>{{ res.persons }}</td>
+                    <td>{{ res.info | e }}</td>
+                    <td>
+                        {% if res.departed %}
+                            <span class="status-text-departed">Gegangen</span>
+                        {% elif res.arrived %}
+                            <span class="status-text-arrived">Angekommen</span>
+                        {% else %}
+                            <span class="status-text-pending">Ausstehend</span>
+                        {% endif %}
+                    </td>
+                    <td class="actions-cell" data-reservation-id="{{ res.id }}">
+                        <button class="button button-edit" onclick="editReservation_listPage('{{ res.id | e }}')">Bearbeiten</button>
+                        <button class="button button-move"
+                                onclick="openMoveReservationModal_listPage('{{ res.id | e }}', '{{ res.name | e }}', '{{ res.display_date }}', '{{ res.time | e }}', {{ res.persons }})">Verschieben
+                        </button>
+                        <button class="button button-delete"
+                                onclick="deleteReservationPrompt_listPage('{{ res.id | e }}', '{{ (res.table_display_name or res.table_id) | e }}', '{{ res.name | e }}', '{{ res.display_date }}', '{{ res.date }}')">Löschen
+                        </button>
+
+                        {% if res.departed %}
+                            <button class="button button-status-departed" disabled>Gast gegangen</button>
+                        {% elif res.arrived %}
+                            <button class="button button-arrival arrived"
+                                    onclick="toggleArrival_listPage('{{ res.id | e }}', this)">Gast da</button>
+                            <button class="button button-mark-departed"
+                                    onclick="promptMarkAsDeparted_listPage('{{ res.id | e }}', this, '{{ res.name | e }}')">Gegangen?</button>
+                        {% else %}
+                            <button class="button button-arrival pending-arrival"
+                                    onclick="toggleArrival_listPage('{{ res.id | e }}', this)">Angekommen?</button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+    </table>
+{% else %}
+    <p class="no-reservations">Keine Reservierungen für das ausgewählte Datum und die Schicht gefunden.</p>
+{% endif %}
+
+<div id="deleteConfirmationModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3>Reservierung löschen</h3>
+        <p id="deleteModalMessageText">Möchten Sie diese Reservierung wirklich löschen?</p>
+        <div class="modal-actions">
+            <button id="confirmDeleteBtn" class="button button-delete-confirm">Ja, löschen</button>
+            <button id="cancelDeleteBtn" class="button button-cancel">Abbrechen</button>
+        </div>
+    </div>
+</div>
+
+<div id="deleteStatusModal" class="modal-overlay">
+    <div class="modal-content modal-status-message">
+    </div>
+</div>
+
+<div id="moveReservationModal" class="modal-overlay">
+    <div class="modal-content">
+        <button class="modal-close-button" onclick="closeMoveReservationModal_listPage()">×</button>
+        <h3>Reservierung verschieben</h3>
+        <p id="moveReservationModalInfo">Wählen Sie einen neuen Tisch für die Reservierung von <strong id="moveReservationGuestName"></strong> (<span id="moveReservationDetails"></span>).</p>
+        <div id="availableTablesForMoveList" style="margin-top: 15px; max-height: 300px; overflow-y: auto; border: 1px solid #eee; padding: 10px;">
+            <p>Verfügbare Tische werden geladen...</p>
+        </div>
+        <div class="modal-actions" style="margin-top: 20px;">
+            <button onclick="closeMoveReservationModal_listPage()" class="button button-cancel">Abbrechen</button>
+        </div>
+    </div>
+</div>
+
+<div id="confirmMoveActionModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3>Verschiebung bestätigen</h3>
+        <p id="confirmMoveActionModalText">Möchten Sie die Reservierung wirklich verschieben?</p>
+        <div class="modal-actions">
+            <button id="executeMoveBtn" class="button button-success">Ja, verschieben</button>
+            <button id="cancelMoveActionBtn" class="button button-cancel">Abbrechen</button>
+        </div>
+    </div>
+</div>
+
+<div id="confirmDepartureModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3>Als gegangen markieren</h3>
+        <p id="confirmDepartureModalText">Möchten Sie diesen Gast wirklich als "gegangen" markieren?</p>
+        <div class="modal-actions">
+            <button id="executeMarkAsDepartedBtn" class="button button-success">Ja, markieren</button>
+            <button id="cancelMarkAsDepartedBtn" class="button button-cancel">Abbrechen</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block bottom_scripts %}
+    {{ super() }}
+    <script>
+        const deleteConfirmationModal_listPage = document.getElementById('deleteConfirmationModal');
+        const deleteModalMessageText_listPage = document.getElementById('deleteModalMessageText');
+        const confirmDeleteBtn_listPage = document.getElementById('confirmDeleteBtn');
+        const cancelDeleteBtn_listPage = document.getElementById('cancelDeleteBtn');
+        const deleteStatusModal_listPage = document.getElementById('deleteStatusModal');
+        const deleteStatusModalContent_listPage = deleteStatusModal_listPage ? deleteStatusModal_listPage.querySelector('.modal-content.modal-status-message') : null;
+
+        const moveReservationModal_listPage = document.getElementById('moveReservationModal');
+        const moveReservationGuestName_listPage = document.getElementById('moveReservationGuestName');
+        const moveReservationDetails_listPage = document.getElementById('moveReservationDetails');
+        const availableTablesListDiv_listPage = document.getElementById('availableTablesForMoveList');
+        const confirmMoveActionModal_listPage = document.getElementById('confirmMoveActionModal');
+        const confirmMoveActionModalText_listPage = document.getElementById('confirmMoveActionModalText');
+        const executeMoveBtn_listPage = document.getElementById('executeMoveBtn');
+        const cancelMoveActionBtn_listPage = document.getElementById('cancelMoveActionBtn');
+
+        const confirmDepartureModal_listPage = document.getElementById('confirmDepartureModal');
+        const confirmDepartureModalText_listPage = document.getElementById('confirmDepartureModalText');
+        const executeMarkAsDepartedBtn_listPage = document.getElementById('executeMarkAsDepartedBtn');
+        const cancelMarkAsDepartedBtn_listPage = document.getElementById('cancelMarkAsDepartedBtn');
+
+        function editReservation_listPage(reservationId) {
+            window.location.href = `{{ url_for('edit_reservation_page', reservation_id='TEMP_ID') }}`.replace('TEMP_ID', reservationId);
+        }
+
+        function deleteReservationPrompt_listPage(reservationId, tableName, guestName, reservationDateForDisplay, originalDateForReload) {
+            const filterDateInput = document.getElementById('filterDate');
+            activeFilterDateBeforeDelete = filterDateInput ? filterDateInput.value : originalDateForReload;
+            if (!deleteConfirmationModal_listPage || !deleteModalMessageText_listPage) {
+                if (confirm(`Möchten Sie die Reservierung für ${guestName} am Tisch ${tableName} (${reservationDateForDisplay}) wirklich löschen?`)) {
+                    performActualDelete_listPage(reservationId);
+                }
+                return;
+            }
+            currentReservationIdToDelete = reservationId;
+            deleteModalMessageText_listPage.textContent = `Möchten Sie die Reservierung für ${guestName} am Tisch ${tableName} (${reservationDateForDisplay}) wirklich löschen?`;
+            if (deleteConfirmationModal_listPage) deleteConfirmationModal_listPage.classList.add('active');
+        }
+
+        if (cancelDeleteBtn_listPage) {
+            cancelDeleteBtn_listPage.addEventListener('click', function() {
+                if (deleteConfirmationModal_listPage) deleteConfirmationModal_listPage.classList.remove('active');
+                currentReservationIdToDelete = null;
+            });
+        }
+
+        if (confirmDeleteBtn_listPage) {
+            confirmDeleteBtn_listPage.addEventListener('click', function() {
+                if (deleteConfirmationModal_listPage) deleteConfirmationModal_listPage.classList.remove('active');
+                if (currentReservationIdToDelete) {
+                    performActualDelete_listPage(currentReservationIdToDelete);
+                }
+            });
+        }
+
+        function performActualDelete_listPage(reservationId) {
+            const apiUrl = `{{ url_for('api_delete_reservation', reservation_id='TEMP_ID') }}`.replace('TEMP_ID', reservationId);
+            fetch(apiUrl, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => {
+                if (!response.ok) { return response.json().catch(() => ({ message: `HTTP Fehler ${response.status}: ${response.statusText}` })).then(errorData => { throw { responseData: errorData, isHttpError: true }; }); }
+                return response.json();
+            })
+            .then(data => {
+                let messageHtml = '';
+                if (data.success) {
+                    messageHtml = `<div class="confirmation-message"><h3>${data.message || 'Erfolgreich gelöscht!'}</h3><p>Die Reservierung wurde erfolgreich aus dem System entfernt.</p><div class="modal-actions" style="margin-top:15px; justify-content: center;"><button onclick="closeStatusModalAndReload()" class="button">Schließen & Aktualisieren</button></div></div>`;
+                } else {
+                    messageHtml = `<div class="error-message"><h3>Fehler beim Löschen</h3><p>${data.message || 'Die Reservierung konnte nicht gelöscht werden.'}</p><div class="modal-actions" style="margin-top:15px; justify-content: center;"><button onclick="closeStatusModal()" class="button">Schließen</button></div></div>`;
+                }
+                if (deleteStatusModalContent_listPage) { deleteStatusModalContent_listPage.innerHTML = messageHtml; if (deleteStatusModal_listPage) deleteStatusModal_listPage.classList.add('active'); }
+            })
+            .catch(error => {
+                let errorMessageText = "Ein unerwarteter Fehler ist aufgetreten.";
+                if (error && error.responseData && error.responseData.message) { errorMessageText = error.responseData.message; } else if (error && error.message) { errorMessageText = error.message; }
+                const messageHtml = `<div class="error-message"><h3>Kommunikationsfehler</h3><p>${errorMessageText}</p><div class="modal-actions" style="margin-top:15px; justify-content: center;"><button onclick="closeStatusModal()" class="button">Schließen</button></div></div>`;
+                if (deleteStatusModalContent_listPage) { deleteStatusModalContent_listPage.innerHTML = messageHtml; if (deleteStatusModal_listPage) deleteStatusModal_listPage.classList.add('active'); }
+            });
+            currentReservationIdToDelete = null;
+        }
+
+        function closeMoveReservationModal_listPage() {
+            if (moveReservationModal_listPage) { moveReservationModal_listPage.classList.remove('active'); }
+            currentReservationToMoveId = null;
+            if (availableTablesListDiv_listPage) { availableTablesListDiv_listPage.innerHTML = '<p>Verfügbare Tische werden geladen...</p>'; }
+        }
+
+        function openMoveReservationModal_listPage(reservationId, guestName, resDate, resTime, resPersons) {
+            if (!moveReservationModal_listPage || !moveReservationGuestName_listPage || !moveReservationDetails_listPage || !availableTablesListDiv_listPage) {
+                alert('Verschieben-Funktion ist momentan nicht verfügbar.');
+                return;
+            }
+            currentReservationToMoveId = reservationId;
+            if(moveReservationGuestName_listPage) moveReservationGuestName_listPage.textContent = guestName;
+            if(moveReservationDetails_listPage) moveReservationDetails_listPage.textContent = `für ${resPersons} Pers. am ${resDate} um ${resTime}`;
+            if(availableTablesListDiv_listPage) availableTablesListDiv_listPage.innerHTML = '<p>Verfügbare Tische werden geladen...</p>';
+            if(moveReservationModal_listPage) moveReservationModal_listPage.classList.add('active');
+
+            fetch(`/api/available_tables_for_move/${reservationId}`)
+                .then(response => {
+                    if (!response.ok) { return response.json().then(err => { throw new Error(err.message || `Serverfehler: ${response.status}`) }); }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success && data.available_tables) { renderAvailableTables_listPage(data.available_tables); }
+                    else { if(availableTablesListDiv_listPage) availableTablesListDiv_listPage.innerHTML = `<p>${data.message || 'Keine verfügbaren Tische gefunden oder Fehler beim Laden.'}</p>`; }
+                })
+                .catch(error => {
+                    if(availableTablesListDiv_listPage) availableTablesListDiv_listPage.innerHTML = `<p>Fehler beim Laden der Tische: ${error.message}</p>`;
+                });
+        }
+
+        function renderAvailableTables_listPage(tables) {
+            if (!availableTablesListDiv_listPage) return;
+            if (tables.length === 0) {
+                availableTablesListDiv_listPage.innerHTML = '<p>Keine passenden freien Tische für diese Reservierung gefunden.</p>';
+                return;
+            }
+            availableTablesListDiv_listPage.innerHTML = '';
+            tables.forEach(table => {
+                const tableItem = document.createElement('div');
+                tableItem.classList.add('available-table-item');
+                let tableTextContent = `${table.display_name}`;
+                 if (table.existing_reservations_at_other_times && table.existing_reservations_at_other_times.length > 0) {
+                    tableTextContent += ` <small style="color: #7f8c8d;">(belegt ab: `;
+                    table.existing_reservations_at_other_times.forEach((res, index) => {
+                        tableTextContent += `${res.time}${index < table.existing_reservations_at_other_times.length - 1 ? ', ' : ''}`;
+                    });
+                    tableTextContent += `)</small>`;
+                } else {
+                    tableTextContent += ` <small style="color: green;">(komplett frei in dieser Schicht)</small>`;
+                }
+                tableItem.innerHTML = tableTextContent;
+                tableItem.setAttribute('data-new-table-id', table.id);
+                tableItem.setAttribute('data-table-name', table.display_name);
+                tableItem.onclick = function() {
+                    confirmAndExecuteMove_listPage(currentReservationToMoveId, table.id, table.display_name);
+                };
+                availableTablesListDiv_listPage.appendChild(tableItem);
+            });
+        }
+
+        function confirmAndExecuteMove_listPage(originalReservationId, newTableId, newTableName) {
+            if (!confirmMoveActionModal_listPage || !confirmMoveActionModalText_listPage || !executeMoveBtn_listPage || !cancelMoveActionBtn_listPage) {
+                if (confirm(`Möchten Sie die Reservierung wirklich auf Tisch ${newTableName} verschieben?`)) {
+                    executeMoveOnServer_listPage(originalReservationId, newTableId);
+                }
+                return;
+            }
+            pendingMoveDetails = { originalReservationId, newTableId };
+            if(confirmMoveActionModalText_listPage) confirmMoveActionModalText_listPage.textContent = `Möchten Sie die Reservierung wirklich auf Tisch ${newTableName} verschieben?`;
+            if(confirmMoveActionModal_listPage) confirmMoveActionModal_listPage.classList.add('active');
+        }
+
+        if (executeMoveBtn_listPage) {
+            executeMoveBtn_listPage.addEventListener('click', function() {
+                if (pendingMoveDetails) {
+                    executeMoveOnServer_listPage(pendingMoveDetails.originalReservationId, pendingMoveDetails.newTableId);
+                }
+                if (confirmMoveActionModal_listPage) confirmMoveActionModal_listPage.classList.remove('active');
+                pendingMoveDetails = null;
+            });
+        }
+
+        if (cancelMoveActionBtn_listPage) {
+            cancelMoveActionBtn_listPage.addEventListener('click', function() {
+                if (confirmMoveActionModal_listPage) confirmMoveActionModal_listPage.classList.remove('active');
+                pendingMoveDetails = null;
+            });
+        }
+
+        function executeMoveOnServer_listPage(reservationId, newTableId) {
+            fetch(`/api/move_reservation/${reservationId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ new_table_id: newTableId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                closeMoveReservationModal_listPage();
+                let messageHtml = '';
+                if (data.success) {
+                    messageHtml = `<div class="confirmation-message"><h3>${data.message || "Reservierung erfolgreich verschoben!"}</h3><div class="modal-actions" style="margin-top:15px; justify-content: center;"><button onclick="closeStatusModalAndReload()" class="button">Schließen & Aktualisieren</button></div></div>`;
+                } else {
+                    messageHtml = `<div class="error-message"><h3>Fehler beim Verschieben</h3><p>${data.message || 'Unbekannter Fehler.'}</p><div class="modal-actions" style="margin-top:15px; justify-content: center;"><button onclick="closeStatusModal()" class="button">Schließen</button></div></div>`;
+                }
+                if (deleteStatusModalContent_listPage) { deleteStatusModalContent_listPage.innerHTML = messageHtml; if (deleteStatusModal_listPage) deleteStatusModal_listPage.classList.add('active'); }
+                else { if (data.success) closeStatusModalAndReload(); }
+            })
+            .catch(error => {
+                alert(`Ein Fehler ist aufgetreten: ${error.message}`);
+                closeMoveReservationModal_listPage();
+            });
+        }
+
+        function closeStatusModal() {
+            if (deleteStatusModal_listPage) deleteStatusModal_listPage.classList.remove('active');
+        }
+
+        function closeStatusModalAndReload() {
+            if (deleteStatusModal_listPage) deleteStatusModal_listPage.classList.remove('active');
+            let targetUrl = `{{ url_for('reservations_list_page') }}`;
+            if (activeFilterDateBeforeDelete && activeFilterDateBeforeDelete !== "") {
+                targetUrl += `?filter_date=${encodeURIComponent(activeFilterDateBeforeDelete)}`;
+            }
+            window.location.assign(targetUrl);
+        }
+
+        function toggleArrival_listPage(reservationId, buttonElement) {
+            fetch(`/api/reservierung_angekommen/${reservationId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => {
+                if (!response.ok) { return response.json().then(err => { throw new Error(err.message || `Serverfehler: ${response.status}`) }); }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    const actionsCell = buttonElement.closest('.actions-cell');
+                    const tableRow = buttonElement.closest('tr');
+                    const statusCell = tableRow ? tableRow.querySelector('td:nth-child(7)') : null;
+
+                    if (data.arrived) {
+                        buttonElement.textContent = 'Gast da';
+                        buttonElement.classList.remove('pending-arrival');
+                        buttonElement.classList.add('arrived');
+                        if (tableRow) tableRow.classList.add('guest-arrived');
+                        if (statusCell) statusCell.innerHTML = '<span class="status-text-arrived">Angekommen</span>';
+
+                        if (actionsCell && !actionsCell.querySelector('.button-mark-departed')) {
+                            const guestName = tableRow.querySelector('td:first-child').textContent;
+                            const departedButton = document.createElement('button');
+                            departedButton.className = 'button button-mark-departed';
+                            departedButton.textContent = 'Gegangen?';
+                            departedButton.onclick = function() { promptMarkAsDeparted_listPage(reservationId, this, guestName); };
+                            buttonElement.parentNode.insertBefore(departedButton, buttonElement.nextSibling);
+                        }
+                    } else {
+                        buttonElement.textContent = 'Angekommen?';
+                        buttonElement.classList.remove('arrived');
+                        buttonElement.classList.add('pending-arrival');
+                        if (tableRow) tableRow.classList.remove('guest-arrived');
+                        if (statusCell) statusCell.innerHTML = '<span class="status-text-pending">Ausstehend</span>';
+
+                        const departedButtonQuery = actionsCell ? actionsCell.querySelector('.button-mark-departed') : null;
+                        if (departedButtonQuery) departedButtonQuery.remove();
+                        const statusDepartedButtonQuery = actionsCell ? actionsCell.querySelector('.button-status-departed') : null;
+                        if (statusDepartedButtonQuery) statusDepartedButtonQuery.remove();
+                        if (tableRow) tableRow.classList.remove('guest-departed-row');
+                    }
+                } else {
+                    alert(`Fehler: ${data.message || 'Status konnte nicht aktualisiert werden.'}`);
+                }
+            })
+            .catch(error => {
+                alert(`Ein Fehler ist aufgetreten: ${error.message}`);
+            });
+        }
+
+        function promptMarkAsDeparted_listPage(reservationId, buttonElement, guestName) {
+            if (!confirmDepartureModal_listPage || !executeMarkAsDepartedBtn_listPage || !cancelMarkAsDepartedBtn_listPage) {
+                if (confirm(`Möchten Sie ${guestName || 'diesen Gast'} wirklich als 'gegangen' markieren?`)) {
+                    performActualMarkAsDeparted_listPage(reservationId, buttonElement);
+                }
+                return;
+            }
+            currentReservationIdToMarkDeparted = reservationId;
+            currentDepartedButtonElement = buttonElement;
+
+            if (confirmDepartureModalText_listPage && guestName) {
+                 confirmDepartureModalText_listPage.innerHTML = `Möchten Sie die Reservierung für <strong>${guestName}</strong> wirklich als "gegangen" markieren?`;
+            } else if (confirmDepartureModalText_listPage) {
+                confirmDepartureModalText_listPage.textContent = `Möchten Sie diesen Gast wirklich als "gegangen" markieren?`;
+            }
+
+            confirmDepartureModal_listPage.classList.add('active');
+        }
+
+        function performActualMarkAsDeparted_listPage(reservationId, buttonElement) {
+            if (!reservationId) return;
+            const apiUrl = `/api/reservierung_gegangen/${encodeURIComponent(reservationId)}`;
+            fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => {
+                if (!response.ok) { return response.json().then(err => { const msg = err.message || `Serverfehler: ${response.status}`; throw new Error(msg); }); }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success && data.departed) {
+                    const actionsCell = buttonElement.closest('.actions-cell');
+                    const tableRow = buttonElement.closest('tr');
+                    const statusCell = tableRow ? tableRow.querySelector('td:nth-child(7)') : null;
+
+                    if (actionsCell) {
+                        const arrivalButton = actionsCell.querySelector('.button-arrival');
+                        if (arrivalButton) arrivalButton.style.display = 'none';
+
+                        if(buttonElement) buttonElement.style.display = 'none';
+
+                        const statusDepartedButton = document.createElement('button');
+                        statusDepartedButton.className = 'button button-status-departed';
+                        statusDepartedButton.textContent = 'Gast gegangen';
+                        statusDepartedButton.disabled = true;
+                        actionsCell.appendChild(statusDepartedButton);
+                    }
+                    if (tableRow) {
+                        tableRow.classList.remove('guest-arrived');
+                        tableRow.classList.add('guest-departed-row');
+                    }
+                    if (statusCell) statusCell.innerHTML = '<span class="status-text-departed">Gegangen</span>';
+                } else {
+                    alert(`Fehler: ${data.message || 'Status konnte nicht auf "gegangen" gesetzt werden.'}`);
+                }
+            })
+            .catch(error => {
+                alert(`Ein Fehler ist aufgetreten: ${error.message}`);
+            });
+        }
+
+        if (executeMarkAsDepartedBtn_listPage) {
+            executeMarkAsDepartedBtn_listPage.addEventListener('click', function() {
+                if (currentReservationIdToMarkDeparted && currentDepartedButtonElement) {
+                    performActualMarkAsDeparted_listPage(currentReservationIdToMarkDeparted, currentDepartedButtonElement);
+                }
+                if (confirmDepartureModal_listPage) confirmDepartureModal_listPage.classList.remove('active');
+                currentReservationIdToMarkDeparted = null;
+                currentDepartedButtonElement = null;
+            });
+        }
+
+        if (cancelMarkAsDepartedBtn_listPage) {
+            cancelMarkAsDepartedBtn_listPage.addEventListener('click', function() {
+                if (confirmDepartureModal_listPage) confirmDepartureModal_listPage.classList.remove('active');
+                currentReservationIdToMarkDeparted = null;
+                currentDepartedButtonElement = null;
+            });
+        }
+
+        const allModalsToCloseOnClickOutside_listPage = [
+            deleteConfirmationModal_listPage,
+            deleteStatusModal_listPage,
+            moveReservationModal_listPage,
+            confirmMoveActionModal_listPage,
+            confirmDepartureModal_listPage
+        ];
+
+        allModalsToCloseOnClickOutside_listPage.forEach(modal => {
+            if (modal) {
+                if (modal.classList.contains('modal-overlay')) {
+                    modal.addEventListener('click', function(event) {
+                        if (event.target === modal) {
+                            modal.classList.remove('active');
+                            if (modal === deleteConfirmationModal_listPage) { currentReservationIdToDelete = null; }
+                            if (modal === moveReservationModal_listPage) { closeMoveReservationModal_listPage(); }
+                            if (modal === confirmMoveActionModal_listPage) { pendingMoveDetails = null; }
+                            if (modal === confirmDepartureModal_listPage) {
+                                currentReservationIdToMarkDeparted = null;
+                                currentDepartedButtonElement = null;
+                            }
+                        }
+                    });
+                }
+                const closeButton = modal.querySelector('.modal-close-button');
+                 if (closeButton && !closeButton.hasAttribute('onclick')) {
+                    closeButton.addEventListener('click', function() {
+                        modal.classList.remove('active');
+                        if (modal === moveReservationModal_listPage) { closeMoveReservationModal_listPage(); }
+                        if (modal === confirmDepartureModal_listPage) {
+                            currentReservationIdToMarkDeparted = null;
+                            currentDepartedButtonElement = null;
+                        }
+                    });
+                }
+            }
+        });
+    </script>
+{% endblock bottom_scripts %}

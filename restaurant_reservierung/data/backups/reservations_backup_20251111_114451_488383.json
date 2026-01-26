@@ -1,0 +1,14 @@
+[
+    {
+        "id": "3218e4ea-f37c-4678-841c-d5bcf49272b0",
+        "name": "adrian",
+        "date": "2025-11-11",
+        "time": "20:00",
+        "persons": 1,
+        "table_id": "garten-r2-t7",
+        "info": "explain our friend group we are ohio",
+        "arrived": true,
+        "departed": true,
+        "shift": "abend"
+    }
+]

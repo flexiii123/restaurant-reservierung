@@ -1,0 +1,363 @@
+{% extends "base.html" %}
+
+{% block page_header_title %}
+    Tischübersicht
+{% endblock %}
+
+{% block title %}
+    Tischübersicht - Restaurant Adler
+{% endblock %}
+
+{% block content %}
+<div class="filter-controls" style="margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
+    <div>
+        <label for="reservationDate">{{ t.date_select }}</label> <!-- War "Datum auswählen:" -->
+        <input type="date" id="reservationDate" name="date" value="{{ selected_date }}">
+    </div>
+    <div>
+        <label for="shiftPicker">{{ t.shift_select }}</label> <!-- War "Schicht auswählen:" -->
+        <select name="shift" id="shiftPicker">
+            {% for shift_value in valid_shifts %}
+                <option value="{{ shift_value }}" {% if shift_value == selected_shift %}selected{% endif %}>
+                    <!-- HIER ÄNDERN: Prüfen welcher Shift es ist und übersetzen -->
+                    {% if shift_value == 'mittag' %}
+                        {{ t.shift_lunch }}
+                    {% elif shift_value == 'abend' %}
+                        {{ t.shift_dinner }}
+                    {% else %}
+                        {{ shift_value|capitalize }}
+                    {% endif %}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+<hr class="controls-divider" style="margin-bottom: 25px;">
+
+{% set areas_order = ['Saal', 'Stube', 'Garten', 'Bar'] %}
+{% set grouped_tables = {} %}
+{% for table in tables %}
+    {% if table.area not in grouped_tables %}
+        {% set _ = grouped_tables.update({table.area: []}) %}
+    {% endif %}
+    {% set _ = grouped_tables[table.area].append(table) %}
+{% endfor %}
+
+{% for area_name in areas_order %}
+    {% if area_name in grouped_tables %}
+    <section class="area-section {% if area_name == 'Garten' %}garden-section{% endif %}" id="area-{{ area_name | lower | replace(' ', '-') }}">
+        <h2>
+            {% if area_name == 'Saal' %}{{ t.area_saal }}
+            {% elif area_name == 'Stube' %}{{ t.area_stube }}
+            {% elif area_name == 'Garten' %}{{ t.area_garten }}
+            {% elif area_name == 'Bar' %}{{ t.area_bar }}
+            {% else %}{{ area_name }}
+            {% endif %}
+        </h2>
+        {% if area_name == 'Garten' %}
+            {% set garten_tables_by_row = {} %}
+            {% for table in grouped_tables[area_name] %}
+                {% if table.row not in garten_tables_by_row %}
+                    {% set _ = garten_tables_by_row.update({table.row: []}) %}
+                {% endif %}
+                {% set _ = garten_tables_by_row[table.row].append(table) %}
+            {% endfor %}
+            {% for r_num in garten_tables_by_row | sort %}
+                {% if garten_tables_by_row[r_num] %}
+                <div class="garden-row">
+                    <div class="table-grid garden-row-grid">
+                        {% for table in garten_tables_by_row[r_num]|sort(attribute='number_in_row') %}
+                            <div class="table-item status-{{ table.status }} {% if table.status == 'belegt' and table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list | length > 0 %}guest-arrived-on-table{% endif %}"
+                                 data-table-id="{{ table.id }}"
+                                 data-area="{{ table.area }}"
+                                 data-table-type="{{ table.type if table.type else '' }}"
+                                 data-has-reservations="{{ 'true' if table.reservations_on_table and table.reservations_on_table|length > 0 else 'false' }}"
+                                 onclick="handleTableClick(this)">
+                                <strong>{{ table.display_name }}</strong>
+                                <p class="status-paragraph">
+                                    <!-- 1. Das Wort "Status" übersetzen -->
+                                    {{ t.status_label }}:
+                                    <span class="status-text
+                                        {% if table.status == 'belegt' and (table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list | length > 0) %}
+                                            status-text-belegt
+                                        {% elif table.status == 'belegt' %}
+                                            status-text-reserviert
+                                        {% else %}
+                                            status-text-frei
+                                        {% endif %}
+                                    ">
+                                        <!-- 2. Den Zustand übersetzen -->
+                                        {% if table.status == 'belegt' and (table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list | length > 0) %}
+                                            {{ t.status_occupied }} ({{ t.guest_arrived }})
+                                        {% elif table.status == 'belegt' %}
+                                            {{ t.status_reserved }}
+                                        {% else %}
+                                            {{ t.status_free }}
+                                        {% endif %}
+                                    </span>
+                                </p>
+                                {% if table.reservations_on_table %}
+                                    <div class="reservations-summary">
+                                        {% for res_detail in table.reservations_on_table %}
+                                            <p class="reservation-entry
+                                                      {% if res_detail.arrived and not res_detail.departed %}guest-has-arrived{% endif %}
+                                                      {% if res_detail.departed %}guest-has-departed-entry{% endif %}"
+                                               data-reservation-id="{{ res_detail.id }}">
+
+                                                {{ res_detail.time }}: {{ res_detail.name|e }} ({{ res_detail.persons }}P)
+
+                                                {% if res_detail.departed %}
+                                                    <span class="departure-status-indicator" style="color: grey; font-weight: normal; font-style: italic;">[Gegangen]</span>
+                                                {% elif res_detail.arrived %}
+                                                    <span class="arrival-status-indicator" style="color: green; font-weight: bold;">[Angekommen]</span>
+                                                {% endif %}
+
+                                                {% if res_detail.info and res_detail.info|trim != "" %}<br><small><em>Info: {{ res_detail.info|e }}</em></small>{% endif %}
+                                            </p>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        {% elif area_name == 'Bar' %}
+            <div class="table-grid bar-row">
+                {% for table in grouped_tables[area_name]|selectattr('type', 'equalto', 'Theke')|sort(attribute='display_name') %}
+                    <div class="table-item status-{{ table.status }} {% if table.status == 'belegt' and table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list | length > 0 %}guest-arrived-on-table{% endif %}"
+                         data-table-id="{{ table.id }}"
+                         data-area="{{ table.area }}"
+                         data-table-type="{{ table.type if table.type else '' }}"
+                         data-has-reservations="{{ 'true' if table.reservations_on_table and table.reservations_on_table|length > 0 else 'false' }}"
+                         onclick="handleTableClick(this)">
+                            <strong>
+                                {% if table.area == 'Saal' %}
+                                    {{ t.area_saal }} {{ table.display_name.split()[-1] }}
+                                {% elif table.area == 'Stube' %}
+                                    {{ t.area_stube }} {{ table.display_name.split()[-1] }}
+                                {% elif table.area == 'Garten' %}
+                                    {{ t.area_garten }} {{ table.display_name.split()[-1] }}
+                                {% elif table.area == 'Bar' %}
+                                    {{ t.area_bar }} {{ table.display_name.split()[-1] }}
+                                {% else %}
+                                    {{ table.display_name }}
+                                {% endif %}
+                            </strong>
+                            <p class="status-paragraph">Status:
+                            <span class="status-text">
+                                {% if table.status == 'belegt' %}
+                                    Belegt
+                                    {% set active_reservations = table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list %}
+                                    {% if active_reservations %}
+                                        ({{ active_reservations|length }}x aktiv)
+                                    {% endif %}
+                                {% else %}
+                                    Frei
+                                {% endif %}
+                            </span>
+                        </p>
+                        {% if table.reservations_on_table %}
+                            <div class="reservations-summary">
+                                {% for res_detail in table.reservations_on_table %}
+                                    <p class="reservation-entry
+                                        {% if res_detail.arrived and not res_detail.departed %}guest-has-arrived{% endif %}
+                                        {% if res_detail.departed %}guest-has-departed-entry{% endif %}"
+                                        data-reservation-id="{{ res_detail.id }}">
+
+                                        {{ res_detail.time }}: {{ res_detail.name|e }} ({{ res_detail.persons }}P)
+
+                                        {% if res_detail.departed %}
+                                            <span class="departure-status-indicator">Gegangen</span>
+                                        {% elif res_detail.arrived %}
+                                            <span class="arrival-status-indicator">Angekommen</span>
+                                        {% endif %}
+
+                                        {% if res_detail.info and res_detail.info|trim != "" %}<br><small><em>Info: {{ res_detail.info|e }}</em></small>{% endif %}
+                                    </p>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+
+            <hr class="controls-divider" style="margin-top: 15px; margin-bottom: 15px;">
+
+            <div class="table-grid bar-row">
+                {% for table in grouped_tables[area_name]|selectattr('type', 'equalto', 'Regulär')|sort(attribute='display_name') %}
+                     <div class="table-item status-{{ table.status }} {% if table.status == 'belegt' and table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list | length > 0 %}guest-arrived-on-table{% endif %}"
+                         data-table-id="{{ table.id }}"
+                         data-area="{{ table.area }}"
+                         data-table-type="{{ table.type if table.type else '' }}"
+                         data-has-reservations="{{ 'true' if table.reservations_on_table and table.reservations_on_table|length > 0 else 'false' }}"
+                         onclick="handleTableClick(this)">
+                        <strong>{{ table.display_name }}</strong>
+                        <p class="status-paragraph">Status:
+                            <span class="status-text">
+                                {% if table.status == 'belegt' %}
+                                    Belegt
+                                    {% set active_reservations = table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list %}
+                                    {% if active_reservations %}
+                                        ({{ active_reservations|length }}x aktiv)
+                                    {% endif %}
+                                {% else %}
+                                    Frei
+                                {% endif %}
+                            </span>
+                        </p>
+                        {% if table.reservations_on_table %}
+                            <div class="reservations-summary">
+                                {% for res_detail in table.reservations_on_table %}
+                                    <p class="reservation-entry
+                                              {% if res_detail.arrived and not res_detail.departed %}guest-has-arrived{% endif %}
+                                              {% if res_detail.departed %}guest-has-departed-entry{% endif %}"
+                                       data-reservation-id="{{ res_detail.id }}">
+
+                                        {{ res_detail.time }}: {{ res_detail.name|e }} ({{ res_detail.persons }}P)
+
+                                        {% if res_detail.departed %}
+                                            <span class="departure-status-indicator" style="color: grey; font-weight: normal; font-style: italic;">[Gegangen]</span>
+                                        {% elif res_detail.arrived %}
+                                            <span class="arrival-status-indicator" style="color: green; font-weight: bold;">[Angekommen]</span>
+                                        {% endif %}
+
+                                        {% if res_detail.info and res_detail.info|trim != "" %}<br><small><em>Info: {{ res_detail.info|e }}</em></small>{% endif %}
+                                    </p>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="table-grid">
+                {% for table in grouped_tables[area_name]|sort(attribute='display_name') %}
+                    <div class="table-item status-{{ table.status }} {% if table.status == 'belegt' and table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list | length > 0 %}guest-arrived-on-table{% endif %}"
+                         data-table-id="{{ table.id }}"
+                         data-area="{{ table.area }}"
+                         data-table-type="{{ table.type if table.type else '' }}"
+                         data-has-reservations="{{ 'true' if table.reservations_on_table and table.reservations_on_table|length > 0 else 'false' }}"
+                         onclick="handleTableClick(this)">
+                        <strong>{{ table.display_name }}</strong>
+                        <p class="status-paragraph">Status:
+                            <span class="status-text">
+                                {% if table.status == 'belegt' %}
+                                    Belegt
+                                    {% set active_reservations = table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list %}
+                                    {% if active_reservations %}
+                                        ({{ active_reservations|length }}x aktiv)
+                                    {% endif %}
+                                {% else %}
+                                    Frei
+                                {% endif %}
+                            </span>
+                        </p>
+                        {% if table.reservations_on_table %}
+                            <div class="reservations-summary">
+                                {% for res_detail in table.reservations_on_table %}
+                                    <p class="reservation-entry
+                                              {% if res_detail.arrived and not res_detail.departed %}guest-has-arrived{% endif %}
+                                              {% if res_detail.departed %}guest-has-departed-entry{% endif %}"
+                                       data-reservation-id="{{ res_detail.id }}">
+
+                                        {{ res_detail.time }}: {{ res_detail.name|e }} ({{ res_detail.persons }}P)
+
+                                        {% if res_detail.departed %}
+                                            <span class="departure-status-indicator" style="color: grey; font-weight: normal; font-style: italic;">[Gegangen]</span>
+                                        {% elif res_detail.arrived %}
+                                            <span class="arrival-status-indicator" style="color: green; font-weight: bold;">[Angekommen]</span>
+                                        {% endif %}
+
+                                        {% if res_detail.info and res_detail.info|trim != "" %}<br><small><em>Info: {{ res_detail.info|e }}</em></small>{% endif %}
+                                    </p>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </section>
+    {% if not loop.last %}
+    <hr class="area-divider">
+    {% endif %}
+    {% endif %}
+{% endfor %}
+
+{% if not tables %}
+    <div class="no-tables-message">
+        <p>Keine Tische konfiguriert.</p>
+    </div>
+{% endif %}
+
+<div id="occupiedTableInfoModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+        <button class="modal-close-button" onclick="closeOccupiedTableInfoModal()">×</button>
+        <h3>Tischdetails</h3>
+        <div id="occupiedTableModalMessageArea">
+            <div id="occupiedTableModalDetails" style="margin-top: 10px; text-align: left; padding-left: 10px; border-left: 3px solid #ccc;">
+            </div>
+        </div>
+        <div class="modal-actions" style="margin-top: 20px;">
+            <button onclick="closeOccupiedTableInfoModal()" class="button button-cancel">Schließen</button>
+        </div>
+    </div>
+</div>
+
+<div id="confirmAddReservationToOccupiedTableModal" class="modal-overlay" >
+    <div class="modal-content">
+        <h3>Tisch bereits belegt</h3>
+        <p>
+            Der Tisch <strong id="confirmAddReservationTableName"></strong> hat bereits Reservierungen für diesen Tag und diese Schicht.
+            <br><br>
+            Möchten Sie trotzdem versuchen, eine weitere Reservierung für eine andere Uhrzeit auf diesem Tisch hinzuzufügen?
+        </p>
+        <div class="modal-actions" style="margin-top: 20px;">
+            <button id="proceedWithReservationBtn" class="button button-success">Ja, fortfahren</button>
+            <button id="cancelAddReservationBtn" class="button button-cancel" onclick="closeConfirmAddReservationModal()">Nein, abbrechen</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block bottom_scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const datePicker = document.getElementById('reservationDate');
+        const shiftPicker = document.getElementById('shiftPicker');
+
+        function updateUrlAndReload() {
+            const selectedDate = datePicker.value;
+            const selectedShift = shiftPicker.value;
+            let currentUrl = window.location.pathname;
+            const params = new URLSearchParams(window.location.search);
+
+            if (selectedDate) {
+                params.set('date', selectedDate);
+            } else {
+                params.delete('date');
+            }
+            if (selectedShift) {
+                params.set('shift', selectedShift);
+            } else {
+                params.delete('shift');
+            }
+            window.location.href = currentUrl + '?' + params.toString();
+        }
+
+        if (datePicker) {
+            const today = new Date().toISOString().split('T')[0];
+            datePicker.setAttribute('min', today);
+            datePicker.addEventListener('change', updateUrlAndReload);
+        }
+        if (shiftPicker) {
+            shiftPicker.addEventListener('change', updateUrlAndReload);
+        }
+    });
+</script>
+{% endblock bottom_scripts %}

@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block page_header_title %}
+    {% if form_mode == 'edit' %}
+        Reservierung bearbeiten
+    {% else %}
+        Neue Reservierung
+    {% endif %}
+{% endblock %}
+
+{% block title %}
+    {% if form_mode == 'edit' %}
+        Reservierung bearbeiten
+    {% else %}
+        Neue Reservierung
+    {% endif %}
+    - Restaurant Schwarzer Adler
+{% endblock %}
+
+{% block content %}
+<div class="form-container" style="max-width: 600px; margin: 20px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+    <h2 style="text-align: center; color: #2c3e50; margin-bottom: 25px;">
+        {% if form_mode == 'edit' %}
+            Reservierung bearbeiten für Tisch: {{ table_name }}
+        {% else %}
+            Reservierung für Tisch: {{ table_name }}
+        {% endif %}
+    </h2>
+
+    <form id="reservationForm">
+        <input type="hidden" id="formMode" name="form_mode" value="{{ form_mode }}">
+        {% if table_id %}
+            <input type="hidden" id="tableId" name="table_id" value="{{ table_id }}">
+        {% endif %}
+        {% if current_reservation_id %}
+            <input type="hidden" id="currentReservationId" name="current_reservation_id" value="{{ current_reservation_id }}">
+        {% endif %}
+
+        <div class="form-group" style="margin-bottom: 18px;">
+            <label for="name" style="display: block; margin-bottom: 6px; font-weight: bold; color: #495057;">Name des Gastes:</label>
+            <input type="text" id="name" name="name" class="form-control" value="{{ reservation_data.name if reservation_data else '' }}" required
+                   style="width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box;">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 18px;">
+            <label for="date" style="display: block; margin-bottom: 6px; font-weight: bold; color: #495057;">Datum:</label>
+            <input type="date" id="date" name="date" class="form-control" value="{{ selected_date if selected_date else '' }}" required
+                   style="width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box;">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 18px;">
+            <label for="shift" style="display: block; margin-bottom: 6px; font-weight: bold; color: #495057;">Schicht:</label>
+            <select id="shift" name="shift" class="form-control" required
+                    style="width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box; background-color: white;">
+                {% for shift_val in available_shifts %}
+                    <option value="{{ shift_val }}" {% if shift_val == current_shift %}selected{% endif %}>
+                        {{ shift_val|capitalize }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 18px;">
+            <label for="time" style="display: block; margin-bottom: 6px; font-weight: bold; color: #495057;">Uhrzeit:</label>
+            <select id="time" name="time" class="form-control" required
+                    style="width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box; background-color: white;">
+                {% if available_times and available_times|length > 0 %}
+                    {% for time_slot in available_times %}
+                        <option value="{{ time_slot }}" {% if reservation_data and reservation_data.time == time_slot %}selected{% endif %}>
+                            {{ time_slot }}
+                        </option>
+                    {% else %}
+                         <option value="" disabled selected>Keine Zeiten verfügbar</option>
+                    {% endfor %}
+                {% else %}
+                     <option value="" disabled selected>Keine Zeiten für diese Auswahl verfügbar</option>
+                {% endif %}
+            </select>
+            {% if not available_times or available_times|length == 0 %}
+                <small style="display: block; margin-top: 5px; color: #e74c3c;">Für die aktuelle Auswahl (Datum/Schicht/Tisch) sind keine freien Uhrzeiten verfügbar. Bitte passen Sie Ihre Auswahl auf der Tischübersicht an oder wählen Sie einen anderen Tisch.</small>
+            {% endif %}
+        </div>
+
+        <div class="form-group" style="margin-bottom: 18px;">
+            <label for="persons" style="display: block; margin-bottom: 6px; font-weight: bold; color: #495057;">Anzahl Personen:</label>
+            <input type="number" id="persons" name="persons" class="form-control" value="{{ reservation_data.persons if reservation_data else '2' }}" min="1" required
+                   style="width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box;">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 25px;">
+            <label for="info" style="display: block; margin-bottom: 6px; font-weight: bold; color: #495057;">Zusätzliche Informationen (optional):</label>
+            <textarea id="info" name="info" class="form-control" rows="3"
+                      style="width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box;">{{ reservation_data.info if reservation_data else '' }}</textarea>
+        </div>
+
+        <div id="formResponseMessage" style="margin-bottom: 15px; padding: 10px; border-radius: 4px; display: none; text-align: center;"></div>
+
+        <div class="form-actions" style="text-align: center;">
+            <button type="submit" class="button button-primary"
+                    style="padding: 12px 25px; background-color: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; transition: background-color 0.2s ease;">
+                {% if form_mode == 'edit' %}
+                    Änderungen speichern
+                {% else %}
+                    Reservierung erstellen
+                {% endif %}
+            </button>
+            <a href="{{ url_for('index', date=selected_date, shift=current_shift) }}" class="button button-cancel"
+               style="margin-left: 10px; padding: 12px 20px; background-color: #e74c3c; color: white; text-decoration: none; border-radius: 4px; font-size: 1em; transition: background-color 0.2s ease;">
+                Abbrechen
+            </a>
+        </div>
+    </form>
+</div>
+
+<div id="formStatusModal" class="modal-overlay">
+    <div class="modal-content modal-status-message" style="max-width: 450px;">
+    </div>
+</div>
+
+{% endblock %}
+
+{% block bottom_scripts %}
+    {{ super() }}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('reservationForm');
+            const formModeInput = document.getElementById('formMode');
+            const responseMessageDiv = document.getElementById('formResponseMessage');
+            const statusModal = document.getElementById('formStatusModal');
+            const statusModalContent = statusModal ? statusModal.querySelector('.modal-content') : null;
+
+            const dateInput = document.getElementById('date');
+            if (dateInput) {
+                const today = new Date().toISOString().split('T')[0];
+                dateInput.setAttribute('min', today);
+            }
+
+            if (form) {
+                form.addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    responseMessageDiv.style.display = 'none';
+                    responseMessageDiv.textContent = '';
+                    responseMessageDiv.className = '';
+
+                    const formData = new FormData(form);
+                    const data = {};
+                    formData.forEach((value, key) => data[key] = value);
+
+                    const tableIdFromInput = document.getElementById('tableId');
+                    if (tableIdFromInput) {
+                        data.table_id = tableIdFromInput.value;
+                    } else if (formModeInput.value === 'new') {
+                        showFormError("Fehler: Tisch-ID nicht gefunden. Bitte versuchen Sie es von der Tischübersicht erneut.");
+                        return;
+                    }
+
+                    let apiUrl;
+                    let httpMethod = 'POST';
+
+                    if (formModeInput.value === 'edit') {
+                        const reservationId = document.getElementById('currentReservationId').value;
+                        apiUrl = `/api/reservierung_bearbeiten/${reservationId}`;
+                    } else {
+                        apiUrl = '/api/neue_reservierung';
+                    }
+
+                    fetch(apiUrl, {
+                        method: httpMethod,
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            return response.text().then(textBody => {
+                                try {
+                                    const errJson = JSON.parse(textBody);
+                                    let errorToThrow = new Error(errJson.message || `Serverfehler: ${response.status}`);
+                                    errorToThrow.errors = errJson.errors;
+                                    throw errorToThrow;
+                                } catch (e) {
+                                    let errorToThrow = new Error(`Serverfehler: ${response.status}. Antwort war kein valides JSON.`);
+                                    errorToThrow.htmlBody = textBody;
+                                    throw errorToThrow;
+                                }
+                            });
+                        }
+                        return response.json();
+                    })
+                    .then(result => {
+                        if (result.success) {
+                            showModalStatusMessage(result.message || "Aktion erfolgreich!", true, result.redirect_url);
+                        } else {
+                            showFormError(result.message || "Ein Fehler ist aufgetreten (aus result).", result.errors);
+                        }
+                    })
+                    .catch(error => {
+                        let mainMessage = error.message || "Ein unerwarteter Fehler ist aufgetreten.";
+                        if (error.htmlBody) {
+                            mainMessage += " Server-Antwort (HTML) im Detail in der Konsole prüfen.";
+                        }
+                        showFormError(mainMessage, error.errors);
+                    });
+                });
+            }
+
+            function showFormError(message, errorsList = null) {
+                responseMessageDiv.textContent = message;
+                responseMessageDiv.className = 'form-message-error';
+                responseMessageDiv.style.backgroundColor = '#f8d7da';
+                responseMessageDiv.style.color = '#721c24';
+                responseMessageDiv.style.border = '1px solid #f5c6cb';
+                responseMessageDiv.style.padding = '10px';
+                responseMessageDiv.style.marginBottom = '15px';
+                responseMessageDiv.style.borderRadius = '4px';
+                responseMessageDiv.style.textAlign = 'center';
+                responseMessageDiv.style.display = 'block';
+
+                if (errorsList && typeof errorsList === 'object') {
+                    const ul = document.createElement('ul');
+                    ul.style.listStyleType = 'none';
+                    ul.style.paddingLeft = '0';
+                    ul.style.marginTop = '10px';
+                    for (const key in errorsList) {
+                        const li = document.createElement('li');
+                        li.textContent = `${key}: ${errorsList[key].join(', ')}`;
+                        ul.appendChild(li);
+                    }
+                    responseMessageDiv.appendChild(ul);
+                }
+            }
+
+               function showModalStatusMessage(message, isSuccess, redirectUrl = null) {
+               if (!statusModal || !statusModalContent) {
+                   console.error("FEHLER: statusModal oder statusModalContent ist NICHT im DOM gefunden!");
+                   return;
+               }
+               let messageHtml = `
+                   <div class="${isSuccess ? 'confirmation-message' : 'error-message'}">
+                       <h3>${isSuccess ? 'Erfolg!' : 'Fehler!'}</h3>
+                       <p>${message}</p>
+                       <div class="modal-actions" style="margin-top:20px; text-align:center;">
+                           <button id="closeFormStatusModalBtn" class="button">${isSuccess && redirectUrl ? 'Schließen & Weiter' : 'Schließen'}</button>
+                       </div>
+                   </div>`;
+               statusModalContent.innerHTML = messageHtml;
+               statusModal.classList.add('active');
+               const closeButton = document.getElementById('closeFormStatusModalBtn');
+               if (!closeButton) {
+                   console.error("FEHLER: Der Button 'closeFormStatusModalBtn' wurde im Modal-Inhalt NICHT gefunden!");
+                   if (statusModal) statusModal.classList.remove('active');
+                   return;
+               }
+               closeButton.addEventListener('click', function handleCloseAndRedirect() {
+                   if (statusModal) statusModal.classList.remove('active');
+                   if (isSuccess && redirectUrl) {
+                       window.location.href = redirectUrl;
+                   } else {
+                   }
+               }, { once: true });
+            }
+        });
+    </script>
+{% endblock bottom_scripts %}
