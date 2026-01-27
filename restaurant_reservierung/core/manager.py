@@ -316,14 +316,14 @@ def is_table_available_for_specific_reservation_time(table_id_to_check, date_str
         return False
     return True
 
-from .models import ALL_TABLES
+from .models import ALL_TABLES, ALL_RESOURCES
 from datetime import timedelta
 
 def get_available_tables_for_moving(original_reservation_obj):
     if not original_reservation_obj:
         return []
     available_tables = []
-    for table_model in ALL_TABLES:
+    for table_model in ALL_RESOURCES:
         if table_model.id == original_reservation_obj.table_id:
             continue
         if is_table_available_for_specific_reservation_time(

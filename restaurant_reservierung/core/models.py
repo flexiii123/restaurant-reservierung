@@ -62,6 +62,39 @@ for i in range(1, 6):
     ))
 
 
+# ... (Code von ALL_TABLES oben drüber) ...
+
+ALL_ROOMS = []
+
+# --- 1. STOCK ---
+# Hier kannst du die Anzahl ändern (z.B. range(1, 6) für 5 Zimmer)
+for i in range(1, 6):
+    room_id = f"zimmer-10{i}"  # IDs: zimmer-101, zimmer-102...
+    display_name = f"Zimmer 10{i}"
+    ALL_ROOMS.append(Table(
+        table_id=room_id,
+        area="1. Stock",
+        capacity=2, # Standardbelegung (kannst du anpassen)
+        display_name=display_name,
+        type="Doppelzimmer"
+    ))
+
+# --- 2. STOCK ---
+for i in range(1, 6):
+    room_id = f"zimmer-20{i}" # IDs: zimmer-201, zimmer-202...
+    display_name = f"Zimmer 20{i}"
+    ALL_ROOMS.append(Table(
+        table_id=room_id,
+        area="2. Stock",
+        capacity=2,
+        display_name=display_name,
+        type="Doppelzimmer"
+    ))
+
+# Hilfsliste für alle Ressourcen (Tische + Zimmer) für die Suche
+ALL_RESOURCES = ALL_TABLES + ALL_ROOMS
+
+
 class Reservation:
     SHIFT_LUNCH = "mittag"
     SHIFT_DINNER = "abend"

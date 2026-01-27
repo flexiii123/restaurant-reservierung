@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="{{ current_lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,14 +12,13 @@
         <div class="header-content">
             <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Restaurant Logo" id="header-logo">
 
-            <!-- Titel wird jetzt dynamisch (siehe Schritt 4) -->
             <h1 id="page-header-title">{% block page_header_title %}{{ t.header_title }}{% endblock %}</h1>
 
             <div style="text-align: right;">
                 <!-- Datumsanzeige -->
                 <div id="current-datetime-display"></div>
 
-                <!-- NEU: Sprachauswahl -->
+                <!-- Sprachauswahl -->
                 <div class="language-selector" style="margin-top: 5px; font-size: 0.9em; color: #ecf0f1;">
                     <a href="{{ url_for('set_language', lang_code='de') }}" style="color: {{ '#fff' if current_lang == 'de' else '#95a5a6' }}; text-decoration: none; font-weight: bold;">DE</a> |
                     <a href="{{ url_for('set_language', lang_code='it') }}" style="color: {{ '#fff' if current_lang == 'it' else '#95a5a6' }}; text-decoration: none; font-weight: bold;">IT</a> |
@@ -29,22 +28,34 @@
         </div>
         <nav>
             <div class="container-main">
-                <!-- HIER DIE ÄNDERUNG: Nur anzeigen, wenn logged_in in session ist -->
                 {% if session.get('logged_in') %}
                 <ul>
-                    <li class="..."><a href="{{ url_for('index') }}">{{ t.nav_tables }}</a></li> <!-- War "Tischübersicht" -->
-                    <li class="..."><a href="{{ url_for('reservations_list_page') }}">{{ t.nav_reservations }}</a></li> <!-- War "Reservierungen" -->
-                    <li style="float: right;"><a href="{{ url_for('logout') }}" ...>{{ t.nav_logout }} ({{ session.get('username') }})</a></li>
+                    <!-- Tischübersicht -->
+                    <li class="{{ 'active-nav-item' if active_nav_tab == 'index' else '' }}">
+                        <a href="{{ url_for('index') }}">{{ t.nav_tables }}</a>
+                    </li>
+
+                    <!-- NEU: Zimmerübersicht -->
+                    <li class="{{ 'active-nav-item' if active_nav_tab == 'rooms_index' else '' }}">
+                        <a href="{{ url_for('rooms_index') }}">{{ t.nav_rooms or 'Zimmerübersicht' }}</a>
+                    </li>
+
+                    <!-- Reservierungen -->
+                    <li class="{{ 'active-nav-item' if active_nav_tab == 'reservations_list_page' else '' }}">
+                        <a href="{{ url_for('reservations_list_page') }}">{{ t.nav_reservations }}</a>
+                    </li>
+
+                    <li style="float: right;">
+                        <a href="{{ url_for('logout') }}">{{ t.nav_logout }} ({{ session.get('username') }})</a>
+                    </li>
                 </ul>
                 {% else %}
-                <!-- Wenn nicht eingeloggt, zeige nichts oder nur Login -->
                 <ul>
                      <li><span style="color: #7f8c8d;">Bitte anmelden</span></li>
                 </ul>
                 {% endif %}
             </div>
         </nav>
-    </header>
     </header>
 
     <main class="container-main">
@@ -55,14 +66,9 @@
     <footer>
         <div class="footer-container">
             <p>© {{ current_year }} Restaurant "Schwarzer Adler" Andrian</p>
-
             <p style="font-size: 0.8em; color: #7f8c8d; margin-top: 5px; margin-bottom: 5px;">
-                Entwickelt von Felix Prackwieser
+                Entwickelt von Prackwieser Felix und Augustin Adrian
             </p>
-
-            {% if generation_time %}
-                <p><small>Seite aktuell am: {{ generation_time }}</small></p>
-            {% endif %}
         </div>
     </footer>
 

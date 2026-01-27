@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Zimmerübersicht - Restaurant Adler{% endblock %}
+{% block page_header_title %}Zimmerübersicht{% endblock %}
+
+{% block content %}
+<div class="filter-controls">
+    <form method="GET" action="{{ url_for('rooms_index') }}" id="filterForm">
+        <div>
+            <label for="reservationDate">{{ t.date_select }}</label>
+            <input type="date" id="reservationDate" name="date" value="{{ selected_date }}">
+        </div>
+
+        <!-- Schichtauswahl (versteckt, aber notwendig für die Logik) -->
+        <div style="display:none;">
+            <label for="shiftPicker">{{ t.shift_select }}</label>
+            <select id="shiftPicker" name="shift">
+                {% for shift_val in valid_shifts %}
+                <option value="{{ shift_val }}" {% if shift_val == selected_shift %}selected{% endif %}>
+                    {{ shift_val|capitalize }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+</div>
+
+<!-- BEREICH: 1. STOCK -->
+<div class="area-section">
+    <h2>{{ t.area_floor1 or '1. Stock' }}</h2>
+    <div class="table-grid">
+        {% for room in rooms if room.area == '1. Stock' %}
+            <div class="table-item status-{{ room.status|lower }} {{ 'guest-arrived-on-table' if room.reservations_on_table|selectattr('arrived')|list|length > 0 else '' }}"
+                 onclick="handleTableClick(this)"
+                 data-table-id="{{ room.id }}"
+                 data-has-reservations="{{ 'true' if room.reservations_on_table else 'false' }}">
+
+                <strong>{{ room.display_name }}</strong>
+
+                <p class="status-paragraph">
+                    {% if room.status == 'frei' %}
+                        <span class="status-text-frei">{{ t.status_free }}</span>
+                    {% else %}
+                        <span class="status-text-belegt">{{ t.status_occupied }}</span>
+                    {% endif %}
+                </p>
+
+                {% if room.reservations_on_table %}
+                <div class="reservations-summary">
+                    {% for res in room.reservations_on_table %}
+                    <div class="reservation-entry {{ 'guest-has-arrived' if res.arrived else '' }}">
+                        <span class="res-time">{{ res.time }}</span> - {{ res.name }}
+                        {% if res.persons %}({{ res.persons }}){% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        {% else %}
+            <p style="color:#777; font-style:italic;">Keine Zimmer im 1. Stock gefunden.</p>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- BEREICH: 2. STOCK -->
+<div class="area-section">
+    <h2>{{ t.area_floor2 or '2. Stock' }}</h2>
+    <div class="table-grid">
+        {% for room in rooms if room.area == '2. Stock' %}
+            <div class="table-item status-{{ room.status|lower }} {{ 'guest-arrived-on-table' if room.reservations_on_table|selectattr('arrived')|list|length > 0 else '' }}"
+                 onclick="handleTableClick(this)"
+                 data-table-id="{{ room.id }}"
+                 data-has-reservations="{{ 'true' if room.reservations_on_table else 'false' }}">
+
+                <strong>{{ room.display_name }}</strong>
+
+                <p class="status-paragraph">
+                    {% if room.status == 'frei' %}
+                        <span class="status-text-frei">{{ t.status_free }}</span>
+                    {% else %}
+                        <span class="status-text-belegt">{{ t.status_occupied }}</span>
+                    {% endif %}
+                </p>
+
+                {% if room.reservations_on_table %}
+                <div class="reservations-summary">
+                    {% for res in room.reservations_on_table %}
+                    <div class="reservation-entry {{ 'guest-has-arrived' if res.arrived else '' }}">
+                        <span class="res-time">{{ res.time }}</span> - {{ res.name }}
+                        {% if res.persons %}({{ res.persons }}){% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        {% else %}
+            <p style="color:#777; font-style:italic;">Keine Zimmer im 2. Stock gefunden.</p>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Modal für belegte Zimmer (gleiche Logik wie bei Tischen) -->
+<div id="confirmAddReservationToOccupiedTableModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3>Zimmer ist bereits belegt</h3>
+        <p>Das Zimmer "<span id="confirmAddReservationTableName" style="font-weight: bold;"></span>" hat für heute bereits eine Buchung.</p>
+        <p>Möchten Sie trotzdem eine weitere Buchung hinzufügen?</p>
+        <div class="modal-actions">
+            <button id="proceedWithReservationBtn" class="button button-success">Ja, fortfahren</button>
+            <button id="cancelAddReservationBtn" class="button button-cancel">Abbrechen</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block bottom_scripts %}
+    {{ super() }}
+    <!-- Das script.js kümmert sich automatisch um die Klicks, da wir handleTableClick() benutzen -->
+{% endblock %}

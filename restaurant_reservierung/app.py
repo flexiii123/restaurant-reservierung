@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify, s
 import datetime, os
 from datetime import timedelta
 from core import manager
-from core.models import ALL_TABLES, Reservation, Reservation as ResModel
+from core.models import ALL_TABLES, ALL_ROOMS, ALL_RESOURCES, Reservation, Reservation as ResModel
 from core.translations import TRANSLATIONS
 import logging
 
@@ -28,7 +28,7 @@ with app.app_context():
     manager.cleanup_old_reservations()
 
 def get_table_display_name_by_id(table_id):
-    for t in ALL_TABLES:
+    for t in ALL_RESOURCES:
         if t.id == table_id:
             return t.display_name
     return table_id
@@ -679,6 +679,66 @@ def api_mark_as_departed(reservation_id):
             status_code = 500 # Allgemeiner Serverfehler
 
         return jsonify({"success": False, "message": message}), status_code
+
+
+@app.route('/zimmer')
+def rooms_index():
+    current_date_obj = datetime.date.today()
+    default_date_str = current_date_obj.strftime("%Y-%m-%d")
+    selected_date_str = request.args.get('date', default_date_str)
+
+    # Schicht ist bei Zimmern meistens egal, aber wir behalten die Logik bei,
+    # damit das System konsistent bleibt. Standardmäßig "Abend" (oder man könnte "Nacht" nennen).
+    selected_shift = request.args.get('shift', Reservation.SHIFT_DINNER)
+
+    all_reservations_objects = manager.load_reservations()
+
+    # Filter Reservierungen für den Tag
+    reservations_for_date = [r for r in all_reservations_objects
+                             if r.date == selected_date_str and r.shift == selected_shift]
+
+    display_rooms_data = []
+
+    # Hier iterieren wir über ALL_ROOMS statt ALL_TABLES
+    for room_model in ALL_ROOMS:
+        room_data = {
+            'id': room_model.id,
+            'area': room_model.area,
+            'capacity': room_model.capacity,
+            'display_name': room_model.display_name,
+            'type': room_model.type,
+            'status': "frei",
+            'reservations_on_table': []
+        }
+
+        is_occupied = False
+        for res_obj in reservations_for_date:
+            if res_obj.table_id == room_model.id:
+                room_data['reservations_on_table'].append({
+                    'id': res_obj.id,
+                    'name': res_obj.name,
+                    'time': res_obj.time,
+                    'persons': res_obj.persons,
+                    'info': res_obj.info,
+                    'arrived': res_obj.arrived,
+                    'departed': getattr(res_obj, 'departed', False)
+                })
+                # Wenn jemand drauf ist, ist das Zimmer belegt
+                if not getattr(res_obj, 'departed', False):
+                    is_occupied = True
+
+        if is_occupied:
+            room_data['status'] = 'belegt'
+
+        display_rooms_data.append(room_data)
+
+    return render_template(
+        'rooms.html',  # Neues Template
+        rooms=display_rooms_data,
+        selected_date=selected_date_str,
+        selected_shift=selected_shift,
+        valid_shifts=Reservation.VALID_SHIFTS
+    )
 
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=5001)
