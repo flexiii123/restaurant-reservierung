@@ -34,5 +34,17 @@
         "arrived": false,
         "departed": false,
         "shift": "abend"
+    },
+    {
+        "id": "61b917f0-6727-4ae5-8d38-16569be45a40",
+        "name": "z65eha5heahr",
+        "date": "2026-01-27",
+        "time": "17:00",
+        "persons": 2,
+        "table_id": "garten-r1-t2",
+        "info": "",
+        "arrived": false,
+        "departed": false,
+        "shift": "abend"
     }
 ]
