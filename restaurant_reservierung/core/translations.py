@@ -3,6 +3,7 @@
 TRANSLATIONS = {
     'de': {
         'nav_tables': 'Tischübersicht',
+        'nav_rooms': 'Zimmerübersicht',
         'nav_reservations': 'Reservierungen',
         'nav_logout': 'Abmelden',
         'header_title': 'Tischübersicht',
@@ -21,10 +22,13 @@ TRANSLATIONS = {
         'area_stube': 'Stube',
         'area_garten': 'Garten',
         'area_bar': 'Bar',
-        'status_label': 'Status'
+        'status_label': 'Status',
+        'area_floor1': '1. Stock',
+        'area_floor2': '2. Stock'
     },
     'it': {
         'nav_tables': 'Panoramica Tavoli',
+        'nav_rooms': 'Panoramica Camere',
         'nav_reservations': 'Prenotazioni',
         'nav_logout': 'Esci',
         'header_title': 'Panoramica Tavoli',
@@ -43,10 +47,13 @@ TRANSLATIONS = {
         'area_stube': 'Stube',
         'area_garten': 'Giardino',
         'area_bar': 'Bar',
-        'status_label': 'Stato'
+        'status_label': 'Stato',
+        'area_floor1': '1° Piano',
+        'area_floor2': '2° Piano'
     },
     'en': {
         'nav_tables': 'Table Overview',
+        'nav_rooms': 'Room Overview',
         'nav_reservations': 'Reservations',
         'nav_logout': 'Logout',
         'header_title': 'Table Overview',
@@ -65,6 +72,8 @@ TRANSLATIONS = {
         'area_stube': 'Parlor',
         'area_garten': 'Garden',
         'area_bar': 'Bar',
-        'status_label': 'Status'
+        'status_label': 'Status',
+        'area_floor1': '1st Floor',
+        'area_floor2': '2nd Floor'
     }
 }
