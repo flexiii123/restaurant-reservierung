@@ -1,0 +1,43 @@
+<tr class="reservation-row {{ 'guest-arrived' if r.arrived and not r.departed else '' }} {{ 'guest-departed-row' if r.departed else '' }}">
+    <td>{{ r.name }}</td>
+    <td>{{ r.table_display_name }}</td>
+    <td>{{ r.display_date }}</td>
+    <td>{{ r.time }}</td>
+    <td>{{ r.persons }}</td>
+    <td>{{ r.info }}</td>
+    <td>
+        {% if r.departed %}
+            <span style="color:grey; font-style:italic;">ist gegangen</span>
+        {% elif r.arrived %}
+            <span style="color:green; font-weight:bold;">ist hier</span>
+        {% else %}
+            <span style="color:#7f8c8d;">Ausstehend</span>
+        {% endif %}
+    </td>
+    <td class="actions-cell">
+       <a href="{{ url_for('edit_reservation_page', reservation_id=r.id) }}" class="button button-edit">Bearbeiten</a>
+
+        <button class="button button-delete"
+                onclick="deleteReservationPrompt_listPage('{{ r.id }}', '{{ r.table_display_name }}', '{{ r.name }}', '{{ r.display_date }}')">
+            Löschen
+        </button>
+
+        <!-- Status Buttons -->
+        {% if not r.departed %}
+            {% if not r.arrived %}
+            <button class="button button-arrival pending-arrival"
+                    onclick="fetch('/api/reservierung_angekommen/{{r.id}}', {method:'POST'}).then(()=>location.reload())">
+                Da?
+            </button>
+            {% else %}
+            <button class="button button-arrival arrived" style="cursor:default;">Gast da</button>
+            <button class="button button-mark-departed"
+                    onclick="fetch('/api/reservierung_gegangen/{{r.id}}', {method:'POST'}).then(()=>location.reload())">
+                Gegangen
+            </button>
+            {% endif %}
+        {% else %}
+            <button class="button" disabled style="background:#ccc; cursor:not-allowed;">Erledigt</button>
+        {% endif %}
+    </td>
+</tr>

@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% block title %}Zimmer buchen{% endblock %}
+
+{% block content %}
+<style>
+    /* ... (CSS bleibt gleich, nur roomResults anpassen falls nötig) ... */
+    .calendar-container { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-bottom: 30px; }
+    .month-block { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); min-width: 350px; }
+    .month-header { text-align: center; font-weight: bold; margin-bottom: 15px; font-size: 1.2em; color: #2c3e50; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; text-align: center; }
+    .cal-day-header { font-size: 0.8em; color: #7f8c8d; padding-bottom: 5px; }
+    .cal-day { padding: 10px 5px; border: 1px solid #eee; cursor: pointer; position: relative; font-size: 0.9em; min-height: 40px; display: flex; align-items: center; justify-content: center; }
+    .cal-day:hover { background-color: #f0f8ff; }
+    .cal-day.empty { background: none; border: none; cursor: default; }
+    .cal-day.selected { background-color: #3498db; color: white; border-color: #2980b9; }
+    .cal-day.in-range { background-color: #ebf5fb; }
+    .cal-day.today { font-weight: bold; border-bottom: 2px solid #e74c3c; }
+
+    /* Resultate Container Stylen */
+    #roomResultsSection {
+        max-width: 900px;
+        margin: 0 auto 30px auto;
+        min-height: 50px;
+    }
+    .selection-info {
+        background: #fff;
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+        text-align: center;
+        margin-bottom: 15px;
+    }
+    .room-card {
+        background: white; padding: 15px; border: 1px solid #ddd; margin-bottom: 10px; border-radius: 5px;
+        display: flex; justify-content: space-between; align-items: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .room-card button { background: #2ecc71; border: none; padding: 8px 15px; color: white; cursor: pointer; border-radius: 4px; }
+
+    .nav-arrows { display: flex; justify-content: flex-end; margin-bottom: 10px; padding-right: 5%; }
+    .arrow-btn { text-decoration: none; padding: 5px 15px; border: 1px solid #ddd; background: white; color: #333; margin-left: 5px; border-radius: 4px; }
+
+    /* Modal styles bleiben gleich */
+    #bookingModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+    #bookingModalContent { background: white; padding: 30px; border-radius: 8px; width: 400px; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+    .form-group input, .form-group select { width: 100%; padding: 8px; box-sizing: border-box; }
+    .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+</style>
+
+<!-- NEU: ERGEBNIS BEREICH ÜBER DEM KALENDER -->
+<div id="roomResultsSection">
+    <div class="selection-info">
+        <span id="selectionDisplay" style="font-weight:bold; font-size: 1.1em;">Bitte Anreise wählen</span>
+        <div style="margin-top: 10px;">
+            <button id="searchRoomsBtn" class="button" style="display:none;" onclick="searchRooms()">Verfügbare Zimmer anzeigen</button>
+            <button id="resetSelectionBtn" class="button button-cancel" style="display:none; margin-left:10px;" onclick="resetAll()">Zurück</button>
+        </div>
+    </div>
+
+    <div id="resultsList" style="display:none;"></div>
+</div>
+
+<div class="nav-arrows">
+    <a href="{{ prev_month_url }}" class="arrow-btn">&larr; Zurück</a>
+    <a href="{{ next_month_url }}" class="arrow-btn">Weiter &rarr;</a>
+</div>
+
+<div class="calendar-container">
+    <!-- Monat 1 -->
+    <div class="month-block">
+        <div class="month-header">{{ m1_name }} {{ year1 }}</div>
+        <div class="cal-grid">
+            <div class="cal-day-header">Mo</div><div class="cal-day-header">Di</div><div class="cal-day-header">Mi</div>
+            <div class="cal-day-header">Do</div><div class="cal-day-header">Fr</div><div class="cal-day-header">Sa</div><div class="cal-day-header">So</div>
+            {% for week in month1_data %}
+                {% for day in week %}
+                    {% if day.month == month1 %}
+                        <div class="cal-day {{ 'today' if day == day.today() else '' }}"
+                             data-date="{{ day.strftime('%Y-%m-%d') }}" onclick="selectDate(this)">
+                            {{ day.day }}
+                        </div>
+                    {% else %}
+                        <div class="cal-day empty"></div>
+                    {% endif %}
+                {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Monat 2 -->
+    <div class="month-block">
+        <div class="month-header">{{ m2_name }} {{ year2 }}</div>
+        <div class="cal-grid">
+            <div class="cal-day-header">Mo</div><div class="cal-day-header">Di</div><div class="cal-day-header">Mi</div>
+            <div class="cal-day-header">Do</div><div class="cal-day-header">Fr</div><div class="cal-day-header">Sa</div><div class="cal-day-header">So</div>
+            {% for week in month2_data %}
+                {% for day in week %}
+                    {% if day.month == month2 %}
+                        <div class="cal-day {{ 'today' if day == day.today() else '' }}"
+                             data-date="{{ day.strftime('%Y-%m-%d') }}" onclick="selectDate(this)">
+                            {{ day.day }}
+                        </div>
+                    {% else %}
+                        <div class="cal-day empty"></div>
+                    {% endif %}
+                {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal (unverändert) -->
+<div id="bookingModal">
+    <div id="bookingModalContent">
+        <h3>Zimmer reservieren</h3>
+        <p id="modalRoomName" style="color:#2c3e50; font-weight:bold; margin-bottom:20px;"></p>
+        <form id="roomBookingForm">
+            <input type="hidden" id="formRoomId" name="table_id">
+            <input type="hidden" id="formStartDate" name="date">
+            <input type="hidden" id="formEndDate" name="end_date">
+
+            <div class="form-group"><label>Name des Gastes</label><input type="text" name="name" required></div>
+            <div class="form-group"><label>Personen</label><input type="number" name="persons" value="2" required></div>
+
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>Anreise Uhrzeit</label>
+                    <select name="time">
+                        {% for h in range(10, 20) %}
+                        <option value="{{ h }}:00">{{ h }}:00</option>
+                        <option value="{{ h }}:30">{{ h }}:30</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Abreise Uhrzeit</label>
+                    <select name="checkout_time">
+                        {% for h in range(10, 16) %}
+                        <option value="{{ h }}:00">{{ h }}:00</option>
+                        <option value="{{ h }}:30">{{ h }}:30</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="button button-cancel" onclick="closeModal()">Abbrechen</button>
+                <button type="submit" class="button button-success">Buchen</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block bottom_scripts %}
+{{ super() }}
+<script>
+    let startDate = null;
+    let endDate = null;
+
+    function selectDate(el) {
+        const dateStr = el.getAttribute('data-date');
+        const clickedDate = new Date(dateStr);
+
+        if (startDate && endDate) {
+            resetAll(); // Reset wenn man neu klickt
+            startDate = clickedDate;
+            highlightDay(el, 'selected');
+        } else if (!startDate) {
+            startDate = clickedDate;
+            highlightDay(el, 'selected');
+        } else {
+            if (clickedDate < startDate) {
+                resetAll();
+                startDate = clickedDate;
+                highlightDay(el, 'selected');
+            } else {
+                endDate = clickedDate;
+                highlightRange();
+            }
+        }
+        updateDisplay();
+    }
+
+    function resetAll() {
+        startDate = null;
+        endDate = null;
+        document.querySelectorAll('.cal-day').forEach(d => {
+            d.classList.remove('selected');
+            d.classList.remove('in-range');
+        });
+        document.getElementById('resultsList').style.display = 'none';
+        document.getElementById('resultsList').innerHTML = '';
+        updateDisplay();
+    }
+
+    function highlightDay(el, className) { el.classList.add(className); }
+
+    function highlightRange() {
+        document.querySelectorAll('.cal-day').forEach(d => {
+            const dDate = new Date(d.getAttribute('data-date'));
+            if (dDate.getTime() === startDate.getTime() || dDate.getTime() === endDate.getTime()) {
+                d.classList.add('selected');
+            } else if (dDate > startDate && dDate < endDate) {
+                d.classList.add('in-range');
+            }
+        });
+    }
+
+    function updateDisplay() {
+        const disp = document.getElementById('selectionDisplay');
+        const btnSearch = document.getElementById('searchRoomsBtn');
+        const btnReset = document.getElementById('resetSelectionBtn');
+
+        if (startDate && endDate) {
+            disp.innerHTML = `Zeitraum: ${formatDate(startDate)} bis ${formatDate(endDate)}`;
+            btnSearch.style.display = 'inline-block';
+            btnReset.style.display = 'inline-block';
+        } else if (startDate) {
+            disp.innerHTML = `Anreise: ${formatDate(startDate)} (Bitte Abreisedatum wählen)`;
+            btnSearch.style.display = 'none';
+            btnReset.style.display = 'inline-block';
+        } else {
+            disp.innerHTML = 'Bitte Anreise wählen';
+            btnSearch.style.display = 'none';
+            btnReset.style.display = 'none';
+        }
+    }
+
+    function formatDate(d) { return d.toISOString().split('T')[0]; }
+
+    function searchRooms() {
+        const startStr = formatDate(startDate);
+        const endStr = formatDate(endDate);
+
+        // Lade-Indikator
+        const list = document.getElementById('resultsList');
+        list.style.display = 'block';
+        list.innerHTML = '<p style="text-align:center; color:#777;">Suche Zimmer...</p>';
+
+        fetch('/api/freie_zimmer_suchen', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ start_date: startStr, end_date: endStr })
+        })
+        .then(r => r.json())
+        .then(data => {
+            list.innerHTML = '';
+            if (data.rooms.length === 0) {
+                list.innerHTML = '<div class="error-message">Keine Zimmer im gewählten Zeitraum verfügbar.</div>';
+            } else {
+                data.rooms.forEach(room => {
+                    const div = document.createElement('div');
+                    div.className = 'room-card';
+                    div.innerHTML = `
+                        <div>
+                            <strong style="font-size:1.1em;">${room.display_name}</strong>
+                            <div style="color:#666; font-size:0.9em;">${room.area} | Max. ${room.capacity} Personen</div>
+                        </div>
+                        <button onclick="openBookingModal('${room.id}', '${room.display_name}')">Auswählen</button>
+                    `;
+                    list.appendChild(div);
+                });
+            }
+        });
+    }
+
+    function openBookingModal(roomId, roomName) {
+        document.getElementById('modalRoomName').innerText = roomName + " | " + formatDate(startDate) + " - " + formatDate(endDate);
+        document.getElementById('formRoomId').value = roomId;
+        document.getElementById('formStartDate').value = formatDate(startDate);
+        document.getElementById('formEndDate').value = formatDate(endDate);
+        document.getElementById('bookingModal').style.display = 'flex';
+    }
+
+    function closeModal() { document.getElementById('bookingModal').style.display = 'none'; }
+
+    document.getElementById('roomBookingForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e.target));
+        fetch('/api/neue_reservierung', {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+        })
+        .then(r => r.json()).then(res => {
+            if(res.success) { alert("Gebucht!"); window.location.href = res.redirect_url; }
+            else { alert("Fehler: " + res.message); }
+        });
+    });
+</script>
+{% endblock %}

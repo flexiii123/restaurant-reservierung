@@ -12,7 +12,7 @@
         <div class="header-content">
             <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Restaurant Logo" id="header-logo">
 
-            <h1 id="page-header-title">{% block page_header_title %}{{ t.header_title }}{% endblock %}</h1>
+            <h1 id="page-header-title">Bild</h1>
 
             <div style="text-align: right;">
                 <!-- Datumsanzeige -->
@@ -36,8 +36,8 @@
                     </li>
 
                     <!-- NEU: Zimmerübersicht -->
-                    <li class="{{ 'active-nav-item' if active_nav_tab == 'rooms_index' else '' }}">
-                        <a href="{{ url_for('rooms_index') }}">{{ t.nav_rooms or 'Zimmerübersicht' }}</a>
+                    <li class="{{ 'active-nav-item' if active_nav_tab == 'room_booking_calendar' else '' }}">
+                        <a href="{{ url_for('room_booking_calendar') }}">Zimmer buchen</a>
                     </li>
 
                     <!-- Reservierungen -->
@@ -50,9 +50,6 @@
                     </li>
                 </ul>
                 {% else %}
-                <ul>
-                     <li><span style="color: #7f8c8d;">Bitte anmelden</span></li>
-                </ul>
                 {% endif %}
             </div>
         </nav>

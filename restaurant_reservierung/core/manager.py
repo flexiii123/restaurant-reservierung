@@ -2,7 +2,8 @@ import json
 import os
 import shutil
 import glob
-from datetime import datetime
+from datetime import datetime, date, timedelta
+from .models import Reservation, ALL_RESOURCES
 import tempfile
 import logging
 
@@ -202,49 +203,60 @@ def save_reservations(reservations_objects_list):
             except OSError as e_rem:
                 logger.warning(f"Konnte temporäre Datei {temp_path} nicht löschen: {e_rem}")
 
-def cleanup_old_reservations():
-    all_reservations = load_reservations(force_reload=True)
-    if not all_reservations:
-        return False
-    today = datetime.now().date()
 
-    min_allowed_date = today - timedelta(days=MAX_RESERVATION_AGE_DAYS)
-    valid_reservations = []
-    deleted_count = 0
-    for res in all_reservations:
+def cleanup_old_reservations():
+    res = load_reservations()
+    limit = date.today() - timedelta(days=7)  # date.today() nutzen
+    new_res = []
+    for r in res:
         try:
-            res_date_obj = datetime.strptime(res.date, "%Y-%m-%d").date()
-            if res_date_obj >= min_allowed_date:
-                valid_reservations.append(res)
-            else:
-                deleted_count += 1
-                logger.info(f"Entferne alte Reservierung: ID {res.id}, Gast: {res.name}, Datum: {res.date}")
+            # Hier nutzen wir datetime.strptime, weil wir String parsen
+            if datetime.strptime(r.date, "%Y-%m-%d").date() >= limit:
+                new_res.append(r)
         except ValueError:
-            logger.warning(
-                f"Reservierung mit ID {res.id} hat ungültiges Datumsformat '{res.date}'. Wird bei Bereinigung behalten.")
-            valid_reservations.append(res)
-    if deleted_count > 0:
-        logger.info(
-            f"Automatische Bereinigung: {deleted_count} Reservierung(en) älter als {MAX_RESERVATION_AGE_DAYS} Tage entfernt.")
-        save_reservations(valid_reservations)
-        return True
-    else:
-        logger.info("Keine alten Reservierungen zum Bereinigen gefunden.")
-        return False
+            new_res.append(r)
+
+    if len(new_res) < len(res): save_reservations(new_res)
 
 import uuid
 
-def create_reservation(name, date_str, time_str, persons, table_id, info="", shift=Reservation.SHIFT_DINNER):
-    reservations = load_reservations()
-    new_id = str(uuid.uuid4())
-    new_reservation = Reservation(
-        reservation_id=new_id, name=name, date_str=date_str, time_str=time_str,
-        persons=persons, table_id=table_id, info=info, shift=shift
-    )
-    reservations.append(new_reservation)
-    save_reservations(reservations)
-    return new_reservation
 
+def create_reservation(name, date, time, persons, table_id, info, shift, end_date=None):
+    res = load_reservations()
+    # Wenn kein end_date angegeben, ist es = date (für Tische)
+    if not end_date: end_date = date
+
+    new_r = Reservation(str(uuid.uuid4()), name, date, time, persons, table_id, info, shift=shift,
+                        end_date_str=end_date)
+    res.append(new_r)
+    save_reservations(res)
+    return new_r
+
+
+def is_room_available(room_id, checkin_str, checkout_str, ignore_id=None):
+    # Wir nutzen datetime.strptime direkt (ohne datetime.datetime...)
+    try:
+        checkin = datetime.strptime(checkin_str, "%Y-%m-%d").date()
+        checkout = datetime.strptime(checkout_str, "%Y-%m-%d").date()
+    except ValueError:
+        return False
+
+    for r in load_reservations():
+        if r.table_id == room_id and r.id != ignore_id:
+            try:
+                r_start = datetime.strptime(r.date, "%Y-%m-%d").date()
+                end_str = getattr(r, 'end_date', None)
+                if end_str:
+                    r_end = datetime.strptime(end_str, "%Y-%m-%d").date()
+                else:
+                    r_end = r_start
+
+                # Überschneidungslogik
+                if checkin < r_end and checkout > r_start:
+                    return False
+            except ValueError:
+                continue
+    return True
 
 def get_reservation_by_id(reservation_id_to_find):
     all_reservations = load_reservations()
@@ -306,63 +318,49 @@ def get_reservations_on_table_at_datetime_and_shift(table_id_to_check, date_str_
             conflicting_reservations.append(res)
     return conflicting_reservations
 
-def is_table_available_for_specific_reservation_time(table_id_to_check, date_str_to_check, time_str_to_check,
-                                                     shift_to_check, reservation_id_to_ignore=None):
-    reservations_at_slot = get_reservations_on_table_at_datetime_and_shift(table_id_to_check, date_str_to_check,
-                                                                           time_str_to_check, shift_to_check)
-    for res in reservations_at_slot:
-        if res.id == reservation_id_to_ignore:
-            continue
-        return False
+
+def is_table_available_for_specific_reservation_time(table_id, date, time, shift, reservation_id_to_ignore=None):
+    # Wenn es ein Zimmer ist, nutzen wir die neue Logik NICHT HIER, sondern rufen is_room_available auf
+    if "zimmer" in table_id:
+        return True  # Hier dummy true, weil wir das im API Endpunkt anders regeln müssen
+
+    for r in load_reservations():
+        if r.table_id == table_id and r.date == date and r.time == time and r.shift == shift:
+            if r.id != reservation_id_to_ignore: return False
     return True
 
 from .models import ALL_TABLES, ALL_RESOURCES
 from datetime import timedelta
 
-def get_available_tables_for_moving(original_reservation_obj):
-    if not original_reservation_obj:
-        return []
-    available_tables = []
-    for table_model in ALL_RESOURCES:
-        if table_model.id == original_reservation_obj.table_id:
-            continue
-        if is_table_available_for_specific_reservation_time(
-                table_id_to_check=table_model.id,
-                date_str_to_check=original_reservation_obj.date,
-                time_str_to_check=original_reservation_obj.time,
-                shift_to_check=original_reservation_obj.shift,
-                reservation_id_to_ignore=original_reservation_obj.id):
-            available_tables.append(table_model)
-    return available_tables
+def get_available_tables_for_moving(original_res):
+    available = []
+    for t in ALL_RESOURCES:
+        if t.id == original_res.table_id: continue
+        # Wenn es ein Zimmer ist, prüfen wir den Zeitraum
+        if "zimmer" in t.id and "zimmer" in original_res.table_id:
+             if is_room_available(t.id, original_res.date, original_res.end_date, original_res.id):
+                 available.append(t)
+        # Sonst normale Tischprüfung
+        elif is_table_available_for_specific_reservation_time(t.id, original_res.date, original_res.time, original_res.shift, original_res.id):
+            available.append(t)
+    return available
 
-def move_reservation(reservation_id_to_move, new_table_id):
-    all_reservations = load_reservations()
-    reservation_to_move = None
-    idx_to_move = -1
 
-    for i, res in enumerate(all_reservations):
-        if res.id == reservation_id_to_move:
-            reservation_to_move = res
-            idx_to_move = i
-            break
-    if not reservation_to_move:
-        logger.warning(f"Verschieben fehlgeschlagen: Reservierung {reservation_id_to_move} nicht gefunden.")
-        return None
-    if not is_table_available_for_specific_reservation_time(
-            table_id_to_check=new_table_id,
-            date_str_to_check=reservation_to_move.date,
-            time_str_to_check=reservation_to_move.time,
-            shift_to_check=reservation_to_move.shift,
-            reservation_id_to_ignore=reservation_id_to_move):
-        logger.warning(
-            f"Verschieben fehlgeschlagen: Ziel-Tisch {new_table_id} ist um {reservation_to_move.time} nicht verfügbar.")
-        return None
+def move_reservation(rid, new_tid):
+    r = get_reservation_by_id(rid)
+    if not r: return None
 
-    reservation_to_move.table_id = new_table_id
-    all_reservations[idx_to_move] = reservation_to_move
-    save_reservations(all_reservations)
-    logger.info(f"Reservierung {reservation_id_to_move} erfolgreich auf Tisch {new_table_id} verschoben.")
-    return reservation_to_move
+    # Check ob Ziel frei ist
+    is_free = False
+    if "zimmer" in new_tid:
+        is_free = is_room_available(new_tid, r.date, r.end_date, rid)
+    else:
+        is_free = is_table_available_for_specific_reservation_time(new_tid, r.date, r.time, r.shift, rid)
+
+    if is_free:
+        r.table_id = new_tid
+        return update_reservation(rid, r.name, r.date, r.time, r.persons, new_tid, r.info, r.shift)
+    return None
 
 def toggle_arrival_status(reservation_id):
     all_reservations = load_reservations()
