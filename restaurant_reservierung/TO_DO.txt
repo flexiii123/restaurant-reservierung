@@ -1,14 +1,13 @@
-Besseres Frontend
-Mehrere Geräte anmeldbar
-Hotelzimmer edition
-(dark mode)????
-sprachen
+verschieben button
 kollision mit tisch wenn gast gegangen
-datenbank???
-mittag uhrzeiten nicht angezeigt
-
+datenbank
 tisch zusammenschiben wenn viele leute sind
-generell text größer
 zimmer automatisch stammtisch mit namen und zimmernummer
-programm auf orderman möglich (wahrscheinlich)
+ausversehen auf gast gegangen geklickt
+spachen und zimmer link funktionieren nicht
+
+Mehrere Geräte anmeldbar
+sprachen
+
+programm auf orderman möglich (wahrscheinlich nicht möglich)
 

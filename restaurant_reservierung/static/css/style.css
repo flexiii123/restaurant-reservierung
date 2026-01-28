@@ -616,3 +616,13 @@ footer {
     font-weight: bold;      /* Macht den Text FETT */
     font-size: 1.1em;       /* Macht den Text 10% GRÖSSER */
 }
+
+/* NEU: Eigene Farbe für den Verschieben-Button */
+.button-move {
+    background-color: #f39c12; /* Ein schönes Gold-Orange */
+    color: #fff;
+}
+
+.button-move:hover {
+    background-color: #e67e22; /* Etwas dunkler beim Hovern */
+}

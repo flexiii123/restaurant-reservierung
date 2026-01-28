@@ -134,6 +134,31 @@
     {% endif %}
 </div>
 
+<!-- ========================================================== -->
+<!-- PRÜFE, OB DIESES HTML FÜR DAS VERSCHIEBEN-MODAL EXISTIERT -->
+<!-- ========================================================== -->
+
+<div id="moveReservationModal" class="modal-overlay">
+    <div class="modal-content">
+        <button class="modal-close-button" onclick="closeMoveReservationModal_listPage()">×</button>
+
+        <h3>Reservierung verschieben</h3>
+
+        <p>Wählen Sie einen neuen Tisch für:
+            <strong id="moveReservationGuestName"></strong>
+            (<span id="moveReservationDetails"></span>)
+        </p>
+
+        <div id="availableTablesForMoveList" style="margin-top: 15px; max-height: 300px; overflow-y: auto; border: 1px solid #eee; padding: 10px;">
+            <!-- Inhalt wird per JavaScript geladen -->
+        </div>
+
+        <div class="modal-actions" style="margin-top: 20px;">
+            <button onclick="closeMoveReservationModal_listPage()" class="button button-cancel">Abbrechen</button>
+        </div>
+    </div>
+</div>
+
 {% include '_modals.html' ignore missing %} <!-- Falls du Modals ausgelagert hast, sonst hier lassen -->
 <div id="deleteConfirmationModal" class="modal-overlay">
     <div class="modal-content">
@@ -148,50 +173,138 @@
 
 {% endblock %}
 
+
 {% block bottom_scripts %}
     {{ super() }}
     <script>
-        // Tab Logik + Shift Toggle
+        // =================================================================
+        // VARIABLEN NUR FÜR DIESE SEITE (mit "_listPage" umbenannt, um Konflikte zu vermeiden)
+        // =================================================================
+        let deleteId_listPage = null;
+        let moveId_listPage = null;
+        const confirmationModal_listPage = document.getElementById('deleteConfirmationModal');
+
+
+        // =================================================================
+        // TEIL 1: TAB-LOGIK
+        // =================================================================
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
             document.getElementById('content-' + tabName).classList.add('active');
 
             const buttons = document.querySelectorAll('.tab-button');
-            if(tabName === 'tables') {
+            if (tabName === 'tables') {
                 buttons[0].classList.add('active');
-                // Tische -> Schicht anzeigen
-                document.getElementById('shiftFilterContainer').style.display = 'inline-block';
+                const shiftFilter = document.getElementById('shiftFilterContainer');
+                if(shiftFilter) shiftFilter.style.display = 'inline-block';
             }
-            if(tabName === 'rooms') {
+            if (tabName === 'rooms') {
                 buttons[1].classList.add('active');
-                // Zimmer -> Schicht verbergen
-                document.getElementById('shiftFilterContainer').style.display = 'none';
+                const shiftFilter = document.getElementById('shiftFilterContainer');
+                if(shiftFilter) shiftFilter.style.display = 'none';
             }
         }
 
-        // Initiale Prüfung beim Laden
-        document.addEventListener('DOMContentLoaded', function() {
-            // Standard ist Tables aktiv, also Shift sichtbar.
-            // Falls man Logik will, um den letzten Tab zu merken, müsste man das hier tun.
-        });
 
-        // Lösch Logik (Kopie oder Referenz)
-        let currentDeleteId = null;
-        const delModal = document.getElementById('deleteConfirmationModal');
+        // =================================================================
+        // TEIL 2: LÖSCH-LOGIK
+        // =================================================================
         function deleteReservationPrompt_listPage(id, table, name, date) {
-            currentDeleteId = id;
-            if(delModal) {
-                document.getElementById('deleteModalMessageText').innerText = `Reservierung für ${name} löschen?`;
-                delModal.classList.add('active');
-            } else if(confirm("Löschen?")) performDelete(id);
+            deleteId_listPage = id; // Benutzt die umbenannte Variable
+            if (confirmationModal_listPage) {
+                const modalText = document.getElementById('deleteModalMessageText');
+                if(modalText) modalText.innerText = `Reservierung für ${name} löschen?`;
+                confirmationModal_listPage.classList.add('active');
+            } else if (confirm("Löschen?")) {
+                performDelete_listPage(id);
+            }
         }
-        if(document.getElementById('confirmDeleteBtn')) document.getElementById('confirmDeleteBtn').onclick = () => performDelete(currentDeleteId);
-        if(document.getElementById('cancelDeleteBtn')) document.getElementById('cancelDeleteBtn').onclick = () => delModal.classList.remove('active');
 
-        function performDelete(id) {
-            fetch('/api/reservierung_loeschen/' + id, {method: 'DELETE'})
-            .then(r => r.json()).then(d => { if(d.success) window.location.reload(); else alert("Fehler"); });
+        if (document.getElementById('confirmDeleteBtn')) {
+            document.getElementById('confirmDeleteBtn').onclick = () => performDelete_listPage(deleteId_listPage);
+        }
+        if (document.getElementById('cancelDeleteBtn')) {
+            document.getElementById('cancelDeleteBtn').onclick = () => confirmationModal_listPage.classList.remove('active');
+        }
+
+        function performDelete_listPage(id) {
+            fetch('/api/reservierung_loeschen/' + id, { method: 'DELETE' })
+                .then(r => r.json()).then(d => {
+                    if (d.success) window.location.reload();
+                    else alert("Fehler beim Löschen.");
+                });
+        }
+
+
+        // =================================================================
+        // TEIL 3: VERSCHIEBEN-LOGIK
+        // =================================================================
+        function closeMoveReservationModal_listPage() {
+            const moveModal = document.getElementById('moveReservationModal');
+            if (moveModal) moveModal.classList.remove('active');
+        }
+
+        function openMoveReservationModal_listPage(reservationId, guestName, resDate, resTime, resPersons) {
+            moveId_listPage = reservationId; // Benutzt die umbenannte Variable
+
+            const moveModal = document.getElementById('moveReservationModal');
+            if (!moveModal) return;
+
+            const guestNameSpan = document.getElementById('moveReservationGuestName');
+            const detailsSpan = document.getElementById('moveReservationDetails');
+            const availableListDiv = document.getElementById('availableTablesForMoveList');
+
+            if (guestNameSpan) guestNameSpan.textContent = guestName;
+            if (detailsSpan) detailsSpan.textContent = `für ${resPersons} Pers. am ${resDate} um ${resTime}`;
+            if (availableListDiv) availableListDiv.innerHTML = '<p>Verfügbare Tische werden geladen...</p>';
+
+            moveModal.classList.add('active');
+
+            fetch(`/api/available_tables_for_move/${reservationId}`)
+                .then(response => response.json())
+                .then(data => {
+                    renderAvailableTables_listPage(data.available_tables || []);
+                })
+                .catch(error => {
+                    if (availableListDiv) availableListDiv.innerHTML = `<p>Fehler beim Laden: ${error.message}</p>`;
+                });
+        }
+
+        function renderAvailableTables_listPage(tables) {
+            const availableListDiv = document.getElementById('availableTablesForMoveList');
+            if (!availableListDiv) return;
+
+            availableListDiv.innerHTML = '';
+            if (tables.length === 0) {
+                availableListDiv.innerHTML = '<p>Keine freien Tische zum Verschieben gefunden.</p>';
+                return;
+            }
+            tables.forEach(table => {
+                const tableItem = document.createElement('div');
+                tableItem.className = 'available-table-item';
+                tableItem.style.cursor = 'pointer';
+                tableItem.innerHTML = `<strong>${table.display_name}</strong>`;
+                tableItem.onclick = () => executeMoveOnServer_listPage(moveId_listPage, table.id); // Benutzt die umbenannte Variable
+                availableListDiv.appendChild(tableItem);
+            });
+        }
+
+        function executeMoveOnServer_listPage(reservationId, newTableId) {
+            fetch(`/api/move_reservation/${reservationId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ new_table_id: newTableId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Erfolgreich verschoben!');
+                    window.location.reload();
+                } else {
+                    alert('Fehler: ' + data.message);
+                }
+            });
         }
     </script>
-{% endblock %}
+{% endblock bottom_scripts %}
