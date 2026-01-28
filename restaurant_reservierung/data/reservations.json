@@ -125,8 +125,8 @@
         "persons": 2,
         "table_id": "saal-3",
         "info": "",
-        "arrived": false,
-        "departed": false,
+        "arrived": true,
+        "departed": true,
         "shift": "abend"
     },
     {
@@ -167,5 +167,18 @@
         "arrived": false,
         "departed": false,
         "shift": "abend"
+    },
+    {
+        "id": "8e4832cd-4025-40b4-b6a8-7278ed9c9e5b",
+        "name": "\u00f6lkjhgfds",
+        "date": "2026-01-28",
+        "end_date": "2026-01-28",
+        "time": "12:30",
+        "persons": 2,
+        "table_id": "saal-1",
+        "info": "",
+        "arrived": false,
+        "departed": false,
+        "shift": "mittag"
     }
 ]
