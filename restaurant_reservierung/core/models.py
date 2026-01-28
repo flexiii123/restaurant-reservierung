@@ -61,95 +61,66 @@ for i in range(1, 6):
         type="Regulär"
     ))
 
-
-# ... (Code von ALL_TABLES oben drüber) ...
-
+# --- ZIMMER UPDATED ---
 ALL_ROOMS = []
 
-# --- 1. STOCK ---
-# Hier kannst du die Anzahl ändern (z.B. range(1, 6) für 5 Zimmer)
-for i in range(1, 6):
-    room_id = f"zimmer-10{i}"  # IDs: zimmer-101, zimmer-102...
-    display_name = f"Zimmer 10{i}"
-    ALL_ROOMS.append(Table(
-        table_id=room_id,
-        area="1. Stock",
-        capacity=2, # Standardbelegung (kannst du anpassen)
-        display_name=display_name,
-        type="Doppelzimmer"
-    ))
+# 1. Stock: 8, 9, 10, 17, 18, 19, 20
+floor1_numbers = [8, 9, 10, 17, 18, 19, 20]
+for num in floor1_numbers:
+    ALL_ROOMS.append(Table(f"zimmer-{num}", "1. Stock", 2, f"Zimmer {num}", type="Doppelzimmer"))
 
-# --- 2. STOCK ---
-for i in range(1, 6):
-    room_id = f"zimmer-20{i}" # IDs: zimmer-201, zimmer-202...
-    display_name = f"Zimmer 20{i}"
-    ALL_ROOMS.append(Table(
-        table_id=room_id,
-        area="2. Stock",
-        capacity=2,
-        display_name=display_name,
-        type="Doppelzimmer"
-    ))
+# 2. Stock: 23, 24, 25, 26, 27
+floor2_numbers = [23, 24, 25, 26, 27]
+for num in floor2_numbers:
+    ALL_ROOMS.append(Table(f"zimmer-{num}", "2. Stock", 2, f"Zimmer {num}", type="Doppelzimmer"))
 
 # Hilfsliste für alle Ressourcen (Tische + Zimmer) für die Suche
 ALL_RESOURCES = ALL_TABLES + ALL_ROOMS
 
+
+# core/models.py
+# ... (Table Klasse und Listen bleiben gleich) ...
 
 class Reservation:
     SHIFT_LUNCH = "mittag"
     SHIFT_DINNER = "abend"
     VALID_SHIFTS = [SHIFT_LUNCH, SHIFT_DINNER]
 
-    def __init__(self, reservation_id, name, date_str, time_str, persons, table_id, info="", arrived=False, departed=False, shift=SHIFT_DINNER):
+    def __init__(self, reservation_id, name, date_str, time_str, persons, table_id, info="", arrived=False, departed=False, shift=SHIFT_DINNER, end_date_str=None):
         self.id = reservation_id
         self.name = name
-        self.date = date_str
-        self.time = time_str
-        try:
-            self.persons = int(persons)
-        except ValueError:
-            self.persons = 0
+        self.date = date_str # Bei Zimmern: Anreise
+        self.end_date = end_date_str if end_date_str else date_str # Bei Zimmern: Abreise (Default: gleicher Tag)
+        self.time = time_str # Bei Zimmern: Anreise-Uhrzeit
+        try: self.persons = int(persons)
+        except: self.persons = 0
         self.table_id = table_id
         self.info = info
         self.arrived = arrived
-        self.departed= departed
-        self.shift = shift if shift in self.VALID_SHIFTS else self.SHIFT_DINNER
+        self.departed = departed
+        self.shift = shift
 
     @classmethod
     def from_dict(cls, data):
-        raw_shift = data.get('shift', cls.SHIFT_DINNER)
-        validated_shift = raw_shift if raw_shift in cls.VALID_SHIFTS else cls.SHIFT_DINNER
-        init_args = {
-            'reservation_id': data.get('id') or data.get('reservation_id'),
-            'name': data.get('name'),
-            'date_str': data.get('date') or data.get('date_str'),
-            'time_str': data.get('time') or data.get('time_str'),
-            'persons': data.get('persons'),
-            'table_id': data.get('table_id'),
-            'info': data.get('info', ""),
-            'arrived': data.get('arrived', False),
-            'departed': data.get('departed', False),
-            'shift': validated_shift
-        }
-        required_keys = ['reservation_id', 'name', 'date_str', 'time_str', 'persons', 'table_id']
-        for key in required_keys:
-            if init_args[key] is None:
-                raise ValueError(f"Fehlender Wert für '{key}' in Reservation Erstellung aus Dict: {data}")
-        return cls(**init_args)
+        return cls(
+            reservation_id=data.get('id'),
+            name=data.get('name'),
+            date_str=data.get('date'),
+            end_date_str=data.get('end_date'), # NEU
+            time_str=data.get('time'),
+            persons=data.get('persons'),
+            table_id=data.get('table_id'),
+            info=data.get('info', ""),
+            arrived=data.get('arrived', False),
+            departed=data.get('departed', False),
+            shift=data.get('shift', cls.SHIFT_DINNER)
+        )
 
     def to_dict(self):
         return {
-            "id": self.id,
-            "name": self.name,
-            "date": self.date,
+            "id": self.id, "name": self.name,
+            "date": self.date, "end_date": self.end_date, # NEU
             "time": self.time,
-            "persons": self.persons,
-            "table_id": self.table_id,
-            "info": self.info,
-            "arrived": self.arrived,
-            "departed": self.departed,
-            "shift": self.shift
+            "persons": self.persons, "table_id": self.table_id, "info": self.info,
+            "arrived": self.arrived, "departed": self.departed, "shift": self.shift
         }
-
-    def __repr__(self):
-        return f"<Reservation ID: {self.id} für '{self.name}' Tisch '{self.table_id}' am {self.date} {self.time} Schicht: {self.shift} Arrived: {self.arrived}>"
