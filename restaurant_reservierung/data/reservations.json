@@ -180,5 +180,18 @@
         "arrived": false,
         "departed": false,
         "shift": "mittag"
+    },
+    {
+        "id": "e9ebe20e-c9f7-4367-a28f-baab6972dac2",
+        "name": "tbdrsvasc",
+        "date": "2026-02-02",
+        "end_date": "2026-02-06",
+        "time": "10:00",
+        "persons": 0,
+        "table_id": "zimmer-20",
+        "info": " | Abreise: 10:00",
+        "arrived": false,
+        "departed": false,
+        "shift": "abend"
     }
 ]
