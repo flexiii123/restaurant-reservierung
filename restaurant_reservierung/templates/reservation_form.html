@@ -49,15 +49,15 @@
         </div>
 
         <div class="form-group" style="margin-bottom: 18px;">
-            <label for="shift" style="display: block; margin-bottom: 6px; font-weight: bold; color: #495057;">Schicht:</label>
-            <select id="shift" name="shift" class="form-control" required
-                    style="width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box; background-color: white;">
-                {% for shift_val in available_shifts %}
-                    <option value="{{ shift_val }}" {% if shift_val == current_shift %}selected{% endif %}>
-                        {{ shift_val|capitalize }}
-                    </option>
-                {% endfor %}
-            </select>
+            <label style="display: block; margin-bottom: 6px; font-weight: bold; color: #495057;">Schicht:</label>
+
+            <!-- 1. Visuelle Anzeige für den Benutzer (nicht änderbar) -->
+            <p style="padding: 10px; background-color: #f4f7f6; border: 1px solid #e0e0e0; border-radius: 4px; margin: 0;">
+                <strong>{{ current_shift | capitalize }}</strong>
+            </p>
+
+            <!-- 2. Verstecktes Feld, damit der Wert trotzdem mit dem Formular gesendet wird -->
+            <input type="hidden" id="shift" name="shift" value="{{ current_shift }}">
         </div>
 
         <div class="form-group" style="margin-bottom: 18px;">

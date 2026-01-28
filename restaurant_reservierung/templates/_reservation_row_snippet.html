@@ -15,29 +15,36 @@
         {% endif %}
     </td>
     <td class="actions-cell">
+       <!-- Bearbeiten Button -->
        <a href="{{ url_for('edit_reservation_page', reservation_id=r.id) }}" class="button button-edit">Bearbeiten</a>
 
-        <button class="button button-delete"
-                onclick="deleteReservationPrompt_listPage('{{ r.id }}', '{{ r.table_display_name }}', '{{ r.name }}', '{{ r.display_date }}')">
-            Löschen
+       <button class="button button-move"
+                onclick="openMoveReservationModal_listPage('{{ r.id }}', '{{ r.name | e }}', '{{ r.display_date }}', '{{ r.time }}', {{ r.persons }})">
+            Verschieben
         </button>
 
-        <!-- Status Buttons -->
-        {% if not r.departed %}
-            {% if not r.arrived %}
-            <button class="button button-arrival pending-arrival"
-                    onclick="fetch('/api/reservierung_angekommen/{{r.id}}', {method:'POST'}).then(()=>location.reload())">
-                Da?
-            </button>
-            {% else %}
-            <button class="button button-arrival arrived" style="cursor:default;">Gast da</button>
-            <button class="button button-mark-departed"
-                    onclick="fetch('/api/reservierung_gegangen/{{r.id}}', {method:'POST'}).then(()=>location.reload())">
-                Gegangen
-            </button>
-            {% endif %}
-        {% else %}
-            <button class="button" disabled style="background:#ccc; cursor:not-allowed;">Erledigt</button>
-        {% endif %}
+       <!-- Löschen Button -->
+       <button class="button button-delete"
+               onclick="deleteReservationPrompt_listPage('{{ r.id }}', '{{ r.table_display_name }}', '{{ r.name }}', '{{ r.display_date }}')">
+           Löschen
+       </button>
+
+       <!-- Status Buttons -->
+       {% if not r.departed %}
+           {% if not r.arrived %}
+           <button class="button button-arrival pending-arrival"
+                   onclick="fetch('/api/reservierung_angekommen/{{r.id}}', {method:'POST'}).then(()=>location.reload())">
+               Da?
+           </button>
+           {% else %}
+           <button class="button button-arrival arrived" style="cursor:default;">Gast da</button>
+           <button class="button button-mark-departed"
+                   onclick="fetch('/api/reservierung_gegangen/{{r.id}}', {method:'POST'}).then(()=>location.reload())">
+               Gegangen
+           </button>
+           {% endif %}
+       {% else %}
+           <button class="button" disabled style="background:#ccc; cursor:not-allowed;">Erledigt</button>
+       {% endif %}
     </td>
 </tr>

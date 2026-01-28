@@ -460,52 +460,46 @@ def api_create_reservation():
         is_room = "zimmer" in table_id.lower()
 
         if is_room:
-            # --- ZIMMER LOGIK ---
-            # Hier nutzen wir die neue Zimmer-Prüfung
+            # --- ZIMMER LOGIK (ist korrekt und bleibt so) ---
             if not manager.is_room_available(table_id, data['date'], data['end_date']):
                 return jsonify({"success": False, "message": "Zimmer im gewählten Zeitraum bereits belegt."}), 409
 
             manager.create_reservation(
-                name=data['name'],
-                date=data['date'],
-                time=data['time'],
-                persons=int(data['persons']),
-                table_id=table_id,
-                info=data.get('info', "") + f" | Abreise: {data.get('checkout_time', 'Standard')}",
-                shift="abend",
-                end_date=data['end_date']
+                name=data['name'], date=data['date'], time=data['time'], persons=int(data['persons']),
+                table_id=table_id, info=data.get('info', "") + f" | Abreise: {data.get('checkout_time', 'Standard')}",
+                shift="abend", end_date=data['end_date']
             )
-            return jsonify(
-                {"success": True, "message": "Zimmer gebucht!", "redirect_url": url_for('reservations_list_page')})
+            return jsonify({
+                "success": True, "message": "Zimmer erfolgreich gebucht!",
+                "redirect_url": url_for('reservations_list_page')
+            })
 
         else:
             # --- TISCH LOGIK ---
-            # HIER WAR DER FEHLER: Wir rufen die Funktion jetzt ohne die alten Schlüsselwörter auf
             if not manager.is_table_available_for_specific_reservation_time(
-                    table_id,  # früher table_id_to_check
-                    data['date'],  # früher date_str_to_check
-                    data['time'],  # früher time_str_to_check
-                    data['shift']  # früher shift_to_check
+                    table_id, data['date'], data['time'], data['shift']
             ):
                 return jsonify({"success": False, "message": "Tisch zur gewählten Zeit bereits belegt."}), 409
 
+            # Hier wird die Reservierung erstellt
             manager.create_reservation(
-                name=data['name'],
-                date=data['date'],
-                time=data['time'],
-                persons=int(data['persons']),
-                table_id=table_id,
-                info=data.get('info', ""),
-                shift=data['shift']
-                # end_date ist hier optional und wird im Manager automatisch gesetzt
+                name=data['name'], date=data['date'], time=data['time'], persons=int(data['persons']),
+                table_id=table_id, info=data.get('info', ""), shift=data['shift']
             )
 
-            return jsonify({"success": True, "message": "Tisch reserviert!",
-                            "redirect_url": url_for('index', date=data['date'], shift=data['shift'])})
+            # ----- START DER KORREKTUR -----
+            # Wir geben jetzt direkt die einfache URL zurück, ohne den "highlight"-Teil.
+            return jsonify({
+                "success": True,
+                "message": "Tisch erfolgreich reserviert!",
+                "redirect_url": url_for('index', date=data['date'], shift=data['shift'])
+            })
+            # ----- ENDE DER KORREKTUR -----
 
     except Exception as e:
-        app.logger.error(f"Fehler beim Erstellen: {e}", exc_info=True)
-        return jsonify({"success": False, "message": f"Serverfehler: {str(e)}"}), 50
+        app.logger.error(f"Fehler beim Erstellen einer Reservierung: {e}", exc_info=True)
+        # HTTP Status 500 für Internal Server Error
+        return jsonify({"success": False, "message": f"Ein Serverfehler ist aufgetreten: {str(e)}"}), 500
 
 @app.route('/api/freie_zimmer_suchen', methods=['POST'])
 def api_search_rooms():

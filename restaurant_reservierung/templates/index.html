@@ -326,38 +326,5 @@
 
 {% block bottom_scripts %}
 {{ super() }}
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const datePicker = document.getElementById('reservationDate');
-        const shiftPicker = document.getElementById('shiftPicker');
 
-        function updateUrlAndReload() {
-            const selectedDate = datePicker.value;
-            const selectedShift = shiftPicker.value;
-            let currentUrl = window.location.pathname;
-            const params = new URLSearchParams(window.location.search);
-
-            if (selectedDate) {
-                params.set('date', selectedDate);
-            } else {
-                params.delete('date');
-            }
-            if (selectedShift) {
-                params.set('shift', selectedShift);
-            } else {
-                params.delete('shift');
-            }
-            window.location.href = currentUrl + '?' + params.toString();
-        }
-
-        if (datePicker) {
-            const today = new Date().toISOString().split('T')[0];
-            datePicker.setAttribute('min', today);
-            datePicker.addEventListener('change', updateUrlAndReload);
-        }
-        if (shiftPicker) {
-            shiftPicker.addEventListener('change', updateUrlAndReload);
-        }
-    });
-</script>
 {% endblock bottom_scripts %}

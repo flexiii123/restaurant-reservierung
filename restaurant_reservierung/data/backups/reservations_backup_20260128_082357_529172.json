@@ -76,5 +76,29 @@
         "arrived": false,
         "departed": false,
         "shift": "abend"
+    },
+    {
+        "id": "9cb34c6f-c519-4c86-abd3-11937361cd54",
+        "name": "tfugf7iougizf",
+        "date": "2026-01-27",
+        "time": "20:00",
+        "persons": 5,
+        "table_id": "saal-1",
+        "info": "mit hund",
+        "arrived": true,
+        "departed": true,
+        "shift": "abend"
+    },
+    {
+        "id": "774f6205-4c74-437c-b379-1ed2b779c28a",
+        "name": "hougviubhpi",
+        "date": "2026-01-27",
+        "time": "21:30",
+        "persons": 2,
+        "table_id": "saal-3",
+        "info": "",
+        "arrived": false,
+        "departed": false,
+        "shift": "abend"
     }
 ]
