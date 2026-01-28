@@ -607,3 +607,12 @@ footer {
     color: #f39c12;
     font-weight: bold;
 }
+
+/* -------------------------------------------------- */
+/* FINAL STYLE: Alle Reservierungen immer fett & groß */
+/* -------------------------------------------------- */
+
+.reservations-summary .reservation-entry {
+    font-weight: bold;      /* Macht den Text FETT */
+    font-size: 1.1em;       /* Macht den Text 10% GRÖSSER */
+}

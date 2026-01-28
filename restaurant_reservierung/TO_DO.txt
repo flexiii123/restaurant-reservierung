@@ -1,7 +1,14 @@
 Besseres Frontend
 Mehrere Geräte anmeldbar
 Hotelzimmer edition
-(dark mode)
+(dark mode)????
 sprachen
 kollision mit tisch wenn gast gegangen
 datenbank???
+mittag uhrzeiten nicht angezeigt
+
+tisch zusammenschiben wenn viele leute sind
+generell text größer
+zimmer automatisch stammtisch mit namen und zimmernummer
+programm auf orderman möglich (wahrscheinlich)
+
