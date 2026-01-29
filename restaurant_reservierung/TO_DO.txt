@@ -5,6 +5,7 @@ tisch zusammenschiben wenn viele leute sind
 zimmer automatisch stammtisch mit namen und zimmernummer
 ausversehen auf gast gegangen geklickt
 spachen und zimmer link funktionieren nicht
+reservierung auf 0 personen
 
 Mehrere Geräte anmeldbar
 sprachen
