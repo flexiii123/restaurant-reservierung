@@ -1,0 +1,36 @@
+<div class="table-item status-{{ table.status }} {% if table.status == 'belegt' and table.reservations_on_table|length > 0 %}guest-arrived-on-table{% endif %}"
+     data-table-id="{{ table.id }}"
+     data-table-name="{{ table.display_name }}"
+     data-area="{{ table.area }}"
+     data-merged="{{ 'true' if table.merged_with else 'false' }}"
+     data-group-id="{{ table.group_id }}"
+     data-has-reservations="{{ 'true' if table.reservations_on_table else 'false' }}"
+     onclick="onTableClick(this)">
+
+    <div class="merged-indicator" title="Verbunden">🔗</div>
+
+    <strong>{{ table.display_name }}</strong>
+
+    {% if table.merged_with %}
+    <div style="font-size:0.7em; color:#3498db; margin-bottom:5px;">+ {{ table.merged_with|length }} Partner</div>
+    {% endif %}
+
+    <p class="status-paragraph">
+        {{ t.status_label }}:
+        <span class="status-text {{ 'status-text-belegt' if table.status=='belegt' else 'status-text-frei' }}">
+            {% if table.status == 'belegt' %}{{ t.status_occupied }}
+            {% else %}{{ t.status_free }}{% endif %}
+        </span>
+    </p>
+
+    {% if table.reservations_on_table %}
+        <div class="reservations-summary">
+            {% for res_detail in table.reservations_on_table %}
+                <p class="reservation-entry {% if res_detail.arrived %}guest-has-arrived{% endif %}">
+                    {{ res_detail.time }}: {{ res_detail.name|e }}
+                    {% if res_detail.arrived %}<span class="arrival-status-indicator">[{{ t.guest_arrived }}]</span>{% endif %}
+                </p>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>

@@ -65,15 +65,15 @@
         "shift": "abend"
     },
     {
-        "id": "07a9865c-607b-4438-b1ff-0f05347d1e89",
-        "name": "adrian",
+        "id": "3715e8e8-fe1c-4432-8aa6-ab48b28de05a",
+        "name": "Adrian",
         "date": "2026-02-04",
-        "end_date": "2026-02-06",
+        "end_date": "2026-02-07",
         "time": "10:00",
         "persons": 2,
-        "table_id": "zimmer-8",
+        "table_id": "zimmer-10",
         "info": " | Abreise: 10:00",
-        "arrived": false,
+        "arrived": true,
         "departed": false,
         "shift": "abend"
     }

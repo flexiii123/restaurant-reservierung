@@ -1,35 +1,102 @@
 {% extends "base.html" %}
 
 {% block page_header_title %}
-    Tischübersicht
+    {{ t['Tischübersicht'] }}
 {% endblock %}
 
 {% block title %}
-    Tischübersicht - Restaurant Adler
+    {{ t['Tischübersicht'] }}
 {% endblock %}
 
 {% block content %}
-<div class="filter-controls" style="margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
-    <div>
-        <label for="reservationDate">{{ t.date_select }}</label> <!-- War "Datum auswählen:" -->
-        <input type="date" id="reservationDate" name="date" value="{{ selected_date }}">
+
+<!-- STYLES -->
+<style>
+    /* Indikator für verbundene Tische */
+    .merged-indicator {
+        position: absolute; top: 5px; right: 5px;
+        background-color: #3498db; color: white;
+        border-radius: 50%; width: 24px; height: 24px;
+        text-align: center; line-height: 24px; font-size: 14px; font-weight: bold;
+        display: none; z-index: 10;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    .table-item[data-merged="true"] .merged-indicator { display: block; }
+
+    /* WICHTIG: Kein !important mehr beim Border, damit JS Farben setzen kann */
+    .table-item[data-merged="true"] {
+        border: 2px dashed #999;
+    }
+
+    /* Editor Modus */
+    .edit-mode-active .table-item { cursor: pointer !important; opacity: 0.8; transition: all 0.2s; }
+    .edit-mode-active .table-item:hover { opacity: 1; transform: scale(1.02); }
+
+    /* Auswahl-Rahmen (Blau) - Überlagert die Gruppenfarbe */
+    .edit-mode-active .table-item.selected-in-editor {
+        box-shadow: 0 0 0 4px #3498db !important; /* Dicker blauer Rahmen außen */
+        transform: scale(1.03);
+        z-index: 5;
+    }
+
+    /* Editor Panel */
+    #editorControls {
+        background: #ecf0f1; padding: 15px; margin-bottom: 20px;
+        border-radius: 5px; display: none; align-items: center; justify-content: space-between;
+        border: 1px solid #bdc3c7; border-left: 5px solid #3498db;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        position: sticky; top: 10px; z-index: 100;
+        flex-wrap: wrap; gap: 10px;
+    }
+
+    /* Toast Notification */
+    #notificationToast {
+        visibility: hidden; min-width: 250px; background-color: #333; color: #fff;
+        text-align: center; border-radius: 4px; padding: 16px; position: fixed;
+        z-index: 9999; left: 50%; bottom: 30px; transform: translateX(-50%);
+        font-size: 17px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    #notificationToast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
+    #notificationToast.success { background-color: #2ecc71; }
+    #notificationToast.error { background-color: #e74c3c; }
+    @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+    @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+</style>
+
+<!-- TOAST CONTAINER -->
+<div id="notificationToast"></div>
+
+<div class="filter-controls" style="margin-bottom: 20px; display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+    <form method="GET" action="{{ url_for('index') }}" id="filterForm" style="display: flex; align-items: center; gap: 15px;">
+        <div>
+            <label for="reservationDate">{{ t['Datum:'] }}</label>
+            <input type="date" id="reservationDate" name="date" value="{{ selected_date }}">
+        </div>
+        <div>
+            <label for="shiftPicker">{{ t['Schicht:'] }}</label>
+            <select name="shift" id="shiftPicker" onchange="this.form.submit()">
+                {% for s in valid_shifts %}
+                    <option value="{{ s }}" {% if s == selected_shift %}selected{% endif %}>{{ t[s|capitalize] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+
+    <button id="toggleEditorBtn" class="button button-secondary" onclick="toggleEditMode()" style="margin-left: auto;">
+        Tischverbindungen
+    </button>
+</div>
+
+<!-- EDITOR PANEL -->
+<div id="editorControls">
+    <div style="display:flex; align-items:center; gap:10px;">
+        <strong style="color:#2c3e50;">Editor:</strong>
+        <span id="editorStatusText">Klicke Tische an...</span>
     </div>
-    <div>
-        <label for="shiftPicker">{{ t.shift_select }}</label> <!-- War "Schicht auswählen:" -->
-        <select name="shift" id="shiftPicker">
-            {% for shift_value in valid_shifts %}
-                <option value="{{ shift_value }}" {% if shift_value == selected_shift %}selected{% endif %}>
-                    <!-- HIER ÄNDERN: Prüfen welcher Shift es ist und übersetzen -->
-                    {% if shift_value == 'mittag' %}
-                        {{ t.shift_lunch }}
-                    {% elif shift_value == 'abend' %}
-                        {{ t.shift_dinner }}
-                    {% else %}
-                        {{ shift_value|capitalize }}
-                    {% endif %}
-                </option>
-            {% endfor %}
-        </select>
+    <div style="display:flex; gap:10px;">
+        <button id="btnConnectTables" class="button button-success" onclick="openConnectModal()" disabled>Verbinden</button>
+        <button id="btnDissolveGroup" class="button button-delete" onclick="openDissolveModal()" disabled>Auflösen</button>
+        <button class="button button-cancel" onclick="stopEditMode()">Beenden</button>
     </div>
 </div>
 
@@ -46,21 +113,14 @@
 
 {% for area_name in areas_order %}
     {% if area_name in grouped_tables %}
-    <section class="area-section {% if area_name == 'Garten' %}garden-section{% endif %}" id="area-{{ area_name | lower | replace(' ', '-') }}">
-        <h2>
-            {% if area_name == 'Saal' %}{{ t.area_saal }}
-            {% elif area_name == 'Stube' %}{{ t.area_stube }}
-            {% elif area_name == 'Garten' %}{{ t.area_garten }}
-            {% elif area_name == 'Bar' %}{{ t.area_bar }}
-            {% else %}{{ area_name }}
-            {% endif %}
-        </h2>
+    <section class="area-section" id="area-{{ area_name | lower | replace(' ', '-') }}">
+        <h2>{{ t[area_name] }}</h2>
+
+        <!-- Bereichslogik -->
         {% if area_name == 'Garten' %}
             {% set garten_tables_by_row = {} %}
             {% for table in grouped_tables[area_name] %}
-                {% if table.row not in garten_tables_by_row %}
-                    {% set _ = garten_tables_by_row.update({table.row: []}) %}
-                {% endif %}
+                {% if table.row not in garten_tables_by_row %}{% set _ = garten_tables_by_row.update({table.row: []}) %}{% endif %}
                 {% set _ = garten_tables_by_row[table.row].append(table) %}
             {% endfor %}
             {% for r_num in garten_tables_by_row | sort %}
@@ -68,256 +128,79 @@
                 <div class="garden-row">
                     <div class="table-grid garden-row-grid">
                         {% for table in garten_tables_by_row[r_num]|sort(attribute='number_in_row') %}
-                            <div class="table-item status-{{ table.status }} {% if table.status == 'belegt' and table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list | length > 0 %}guest-arrived-on-table{% endif %}"
-                                 data-table-id="{{ table.id }}"
-                                 data-area="{{ table.area }}"
-                                 data-table-type="{{ table.type if table.type else '' }}"
-                                 data-has-reservations="{{ 'true' if table.reservations_on_table and table.reservations_on_table|length > 0 else 'false' }}"
-                                 onclick="handleTableClick(this)">
-                                <strong>{{ table.display_name }}</strong>
-                                <p class="status-paragraph">
-                                    <!-- 1. Das Wort "Status" übersetzen -->
-                                    {{ t.status_label }}:
-                                    <span class="status-text
-                                        {% if table.status == 'belegt' and (table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list | length > 0) %}
-                                            status-text-belegt
-                                        {% elif table.status == 'belegt' %}
-                                            status-text-reserviert
-                                        {% else %}
-                                            status-text-frei
-                                        {% endif %}
-                                    ">
-                                        <!-- 2. Den Zustand übersetzen -->
-                                        {% if table.status == 'belegt' and (table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list | length > 0) %}
-                                            {{ t.status_occupied }} ({{ t.guest_arrived }})
-                                        {% elif table.status == 'belegt' %}
-                                            {{ t.status_reserved }}
-                                        {% else %}
-                                            {{ t.status_free }}
-                                        {% endif %}
-                                    </span>
-                                </p>
-                                {% if table.reservations_on_table %}
-                                    <div class="reservations-summary">
-                                        {% for res_detail in table.reservations_on_table %}
-                                            <p class="reservation-entry
-                                                      {% if res_detail.arrived and not res_detail.departed %}guest-has-arrived{% endif %}
-                                                      {% if res_detail.departed %}guest-has-departed-entry{% endif %}"
-                                               data-reservation-id="{{ res_detail.id }}">
-
-                                                {{ res_detail.time }}: {{ res_detail.name|e }} ({{ res_detail.persons }}P)
-
-                                                {% if res_detail.departed %}
-                                                    <span class="departure-status-indicator" style="color: grey; font-weight: normal; font-style: italic;">[Gegangen]</span>
-                                                {% elif res_detail.arrived %}
-                                                    <span class="arrival-status-indicator" style="color: green; font-weight: bold;">[Angekommen]</span>
-                                                {% endif %}
-
-                                                {% if res_detail.info and res_detail.info|trim != "" %}<br><small><em>Info: {{ res_detail.info|e }}</em></small>{% endif %}
-                                            </p>
-                                        {% endfor %}
-                                    </div>
-                                {% endif %}
-                            </div>
+                            {% include '_table_card_inline_macro.html' %}
                         {% endfor %}
                     </div>
                 </div>
                 {% endif %}
             {% endfor %}
+
         {% elif area_name == 'Bar' %}
             <div class="table-grid bar-row">
                 {% for table in grouped_tables[area_name]|selectattr('type', 'equalto', 'Theke')|sort(attribute='display_name') %}
-                    <div class="table-item status-{{ table.status }} {% if table.status == 'belegt' and table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list | length > 0 %}guest-arrived-on-table{% endif %}"
-                         data-table-id="{{ table.id }}"
-                         data-area="{{ table.area }}"
-                         data-table-type="{{ table.type if table.type else '' }}"
-                         data-has-reservations="{{ 'true' if table.reservations_on_table and table.reservations_on_table|length > 0 else 'false' }}"
-                         onclick="handleTableClick(this)">
-                            <strong>
-                                {% if table.area == 'Saal' %}
-                                    {{ t.area_saal }} {{ table.display_name.split()[-1] }}
-                                {% elif table.area == 'Stube' %}
-                                    {{ t.area_stube }} {{ table.display_name.split()[-1] }}
-                                {% elif table.area == 'Garten' %}
-                                    {{ t.area_garten }} {{ table.display_name.split()[-1] }}
-                                {% elif table.area == 'Bar' %}
-                                    {{ t.area_bar }} {{ table.display_name.split()[-1] }}
-                                {% else %}
-                                    {{ table.display_name }}
-                                {% endif %}
-                            </strong>
-                            <p class="status-paragraph">Status:
-                            <span class="status-text">
-                                {% if table.status == 'belegt' %}
-                                    Belegt
-                                    {% set active_reservations = table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list %}
-                                    {% if active_reservations %}
-                                        ({{ active_reservations|length }}x aktiv)
-                                    {% endif %}
-                                {% else %}
-                                    Frei
-                                {% endif %}
-                            </span>
-                        </p>
-                        {% if table.reservations_on_table %}
-                            <div class="reservations-summary">
-                                {% for res_detail in table.reservations_on_table %}
-                                    <p class="reservation-entry
-                                        {% if res_detail.arrived and not res_detail.departed %}guest-has-arrived{% endif %}
-                                        {% if res_detail.departed %}guest-has-departed-entry{% endif %}"
-                                        data-reservation-id="{{ res_detail.id }}">
-
-                                        {{ res_detail.time }}: {{ res_detail.name|e }} ({{ res_detail.persons }}P)
-
-                                        {% if res_detail.departed %}
-                                            <span class="departure-status-indicator">Gegangen</span>
-                                        {% elif res_detail.arrived %}
-                                            <span class="arrival-status-indicator">Angekommen</span>
-                                        {% endif %}
-
-                                        {% if res_detail.info and res_detail.info|trim != "" %}<br><small><em>Info: {{ res_detail.info|e }}</em></small>{% endif %}
-                                    </p>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                    </div>
+                    {% include '_table_card_inline_macro.html' %}
                 {% endfor %}
             </div>
-
             <hr class="controls-divider" style="margin-top: 15px; margin-bottom: 15px;">
-
             <div class="table-grid bar-row">
                 {% for table in grouped_tables[area_name]|selectattr('type', 'equalto', 'Regulär')|sort(attribute='display_name') %}
-                     <div class="table-item status-{{ table.status }} {% if table.status == 'belegt' and table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list | length > 0 %}guest-arrived-on-table{% endif %}"
-                         data-table-id="{{ table.id }}"
-                         data-area="{{ table.area }}"
-                         data-table-type="{{ table.type if table.type else '' }}"
-                         data-has-reservations="{{ 'true' if table.reservations_on_table and table.reservations_on_table|length > 0 else 'false' }}"
-                         onclick="handleTableClick(this)">
-                        <strong>{{ table.display_name }}</strong>
-                        <p class="status-paragraph">Status:
-                            <span class="status-text">
-                                {% if table.status == 'belegt' %}
-                                    Belegt
-                                    {% set active_reservations = table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list %}
-                                    {% if active_reservations %}
-                                        ({{ active_reservations|length }}x aktiv)
-                                    {% endif %}
-                                {% else %}
-                                    Frei
-                                {% endif %}
-                            </span>
-                        </p>
-                        {% if table.reservations_on_table %}
-                            <div class="reservations-summary">
-                                {% for res_detail in table.reservations_on_table %}
-                                    <p class="reservation-entry
-                                              {% if res_detail.arrived and not res_detail.departed %}guest-has-arrived{% endif %}
-                                              {% if res_detail.departed %}guest-has-departed-entry{% endif %}"
-                                       data-reservation-id="{{ res_detail.id }}">
-
-                                        {{ res_detail.time }}: {{ res_detail.name|e }} ({{ res_detail.persons }}P)
-
-                                        {% if res_detail.departed %}
-                                            <span class="departure-status-indicator" style="color: grey; font-weight: normal; font-style: italic;">[Gegangen]</span>
-                                        {% elif res_detail.arrived %}
-                                            <span class="arrival-status-indicator" style="color: green; font-weight: bold;">[Angekommen]</span>
-                                        {% endif %}
-
-                                        {% if res_detail.info and res_detail.info|trim != "" %}<br><small><em>Info: {{ res_detail.info|e }}</em></small>{% endif %}
-                                    </p>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                    </div>
+                     {% include '_table_card_inline_macro.html' %}
                 {% endfor %}
             </div>
+
         {% else %}
             <div class="table-grid">
                 {% for table in grouped_tables[area_name]|sort(attribute='display_name') %}
-                    <div class="table-item status-{{ table.status }} {% if table.status == 'belegt' and table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list | length > 0 %}guest-arrived-on-table{% endif %}"
-                         data-table-id="{{ table.id }}"
-                         data-area="{{ table.area }}"
-                         data-table-type="{{ table.type if table.type else '' }}"
-                         data-has-reservations="{{ 'true' if table.reservations_on_table and table.reservations_on_table|length > 0 else 'false' }}"
-                         onclick="handleTableClick(this)">
-                        <strong>{{ table.display_name }}</strong>
-                        <p class="status-paragraph">Status:
-                            <span class="status-text">
-                                {% if table.status == 'belegt' %}
-                                    Belegt
-                                    {% set active_reservations = table.reservations_on_table | selectattr('arrived', 'equalto', true) | selectattr('departed', 'ne', true) | list %}
-                                    {% if active_reservations %}
-                                        ({{ active_reservations|length }}x aktiv)
-                                    {% endif %}
-                                {% else %}
-                                    Frei
-                                {% endif %}
-                            </span>
-                        </p>
-                        {% if table.reservations_on_table %}
-                            <div class="reservations-summary">
-                                {% for res_detail in table.reservations_on_table %}
-                                    <p class="reservation-entry
-                                              {% if res_detail.arrived and not res_detail.departed %}guest-has-arrived{% endif %}
-                                              {% if res_detail.departed %}guest-has-departed-entry{% endif %}"
-                                       data-reservation-id="{{ res_detail.id }}">
-
-                                        {{ res_detail.time }}: {{ res_detail.name|e }} ({{ res_detail.persons }}P)
-
-                                        {% if res_detail.departed %}
-                                            <span class="departure-status-indicator" style="color: grey; font-weight: normal; font-style: italic;">[Gegangen]</span>
-                                        {% elif res_detail.arrived %}
-                                            <span class="arrival-status-indicator" style="color: green; font-weight: bold;">[Angekommen]</span>
-                                        {% endif %}
-
-                                        {% if res_detail.info and res_detail.info|trim != "" %}<br><small><em>Info: {{ res_detail.info|e }}</em></small>{% endif %}
-                                    </p>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                    </div>
+                    {% include '_table_card_inline_macro.html' %}
                 {% endfor %}
             </div>
         {% endif %}
     </section>
-    {% if not loop.last %}
-    <hr class="area-divider">
-    {% endif %}
+    {% if not loop.last %}<hr class="area-divider">{% endif %}
     {% endif %}
 {% endfor %}
 
-{% if not tables %}
-    <div class="no-tables-message">
-        <p>Keine Tische konfiguriert.</p>
-    </div>
-{% endif %}
-
-<div id="occupiedTableInfoModal" class="modal-overlay" style="display:none;">
+<!-- MODALS -->
+<div id="connectModal" class="modal-overlay">
     <div class="modal-content">
-        <button class="modal-close-button" onclick="closeOccupiedTableInfoModal()">×</button>
-        <h3>Tischdetails</h3>
-        <div id="occupiedTableModalMessageArea">
-            <div id="occupiedTableModalDetails" style="margin-top: 10px; text-align: left; padding-left: 10px; border-left: 3px solid #ccc;">
-            </div>
-        </div>
-        <div class="modal-actions" style="margin-top: 20px;">
-            <button onclick="closeOccupiedTableInfoModal()" class="button button-cancel">Schließen</button>
+        <h3>Tische verbinden</h3>
+        <p>Möchtest du die <span id="connectCount" style="font-weight:bold;"></span> ausgewählten Tische verbinden?</p>
+        <div class="modal-actions">
+            <button onclick="executeMerge()" class="button button-success">Ja, verbinden</button>
+            <button onclick="document.getElementById('connectModal').classList.remove('active')" class="button button-cancel">Abbrechen</button>
         </div>
     </div>
 </div>
 
+<div id="dissolveModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3>Verbindung lösen</h3>
+        <p>Möchtest du die Verbindungen von <span id="dissolveCount" style="font-weight:bold;"></span> ausgewählten Tischen entfernen?</p>
+        <div class="modal-actions">
+            <button onclick="executeDissolve()" class="button button-delete">Ja, auflösen</button>
+            <button onclick="document.getElementById('dissolveModal').classList.remove('active')" class="button button-cancel">Abbrechen</button>
+        </div>
+    </div>
+</div>
+
+<!-- Details Modal -->
+<div id="occupiedTableInfoModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+        <button class="modal-close-button" onclick="closeOccupiedTableInfoModal()">×</button>
+        <h3>Details</h3>
+        <div id="occupiedTableModalMessageArea"><div id="occupiedTableModalDetails" style="margin-top:10px;text-align:left;padding-left:10px;border-left:3px solid #ccc;"></div></div>
+        <div class="modal-actions" style="margin-top:20px;"><button onclick="closeOccupiedTableInfoModal()" class="button button-cancel">Schließen</button></div>
+    </div>
+</div>
+
+<!-- Confirm Add Modal -->
 <div id="confirmAddReservationToOccupiedTableModal" class="modal-overlay" >
     <div class="modal-content">
-        <h3>Tisch bereits belegt</h3>
-        <p>
-            Der Tisch <strong id="confirmAddReservationTableName"></strong> hat bereits Reservierungen für diesen Tag und diese Schicht.
-            <br><br>
-            Möchten Sie trotzdem versuchen, eine weitere Reservierung für eine andere Uhrzeit auf diesem Tisch hinzuzufügen?
-        </p>
-        <div class="modal-actions" style="margin-top: 20px;">
-            <button id="proceedWithReservationBtn" class="button button-success">Ja, fortfahren</button>
-            <button id="cancelAddReservationBtn" class="button button-cancel" onclick="closeConfirmAddReservationModal()">Nein, abbrechen</button>
+        <h3>{{ t['Belegt'] }}</h3>
+        <p><strong id="confirmAddReservationTableName"></strong> {{ t['Belegt'] }}. {{ t['Weiter'] }}?</p>
+        <div class="modal-actions" style="margin-top:20px;">
+            <button id="proceedWithReservationBtn" class="button button-success">{{ t['Weiter'] }}</button>
+            <button id="cancelAddReservationBtn" class="button button-cancel" onclick="closeConfirmAddReservationModal()">{{ t['Abbrechen'] }}</button>
         </div>
     </div>
 </div>
@@ -326,5 +209,202 @@
 
 {% block bottom_scripts %}
 {{ super() }}
+<script>
+    // --- JS LOGIK FÜR EDITOR ---
 
-{% endblock bottom_scripts %}
+    let isEditMode = false;
+    let selectedTableIds = []; // Array von IDs
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if (sessionStorage.getItem('editorMode') === 'true') {
+            startEditMode(false);
+            const msg = sessionStorage.getItem('editorMessage');
+            if (msg) { showToast(msg, 'success'); sessionStorage.removeItem('editorMessage'); }
+        }
+
+        const sp = document.getElementById('shiftPicker');
+        if(sp) sp.addEventListener('change', function() { this.form.submit(); });
+    });
+
+    // --- FARB LOGIK ---
+    // Generiert eine Farbe basierend auf der Gruppen-ID
+    function stringToColor(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        // Farben etwas heller/pastelliger machen für Hintergrund
+        const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+        return '#' + "00000".substring(0, 6 - c.length) + c;
+    }
+
+    function colorizeGroups() {
+        document.querySelectorAll('.table-item').forEach(el => {
+            const groupId = el.getAttribute('data-group-id');
+            const isMerged = el.getAttribute('data-merged') === 'true';
+
+            // Wir färben IMMER ein, wenn der Editor aktiv ist und es eine Gruppe gibt.
+            if (isEditMode && isMerged && groupId) {
+                const color = stringToColor(groupId);
+
+                // Setze den gestrichelten Rahmen auf die Gruppenfarbe
+                el.style.border = `3px dashed ${color}`;
+                // Setze einen leichten Hintergrund
+                el.style.backgroundColor = `${color}22`; // 22 = transparenz
+
+                // Indikator auch färben
+                const badge = el.querySelector('.merged-indicator');
+                if(badge) {
+                    badge.style.backgroundColor = color;
+                    // Damit man die Nummer sieht, Text schwarz oder weiss je nach Helligkeit (hier einfach weiss lassen)
+                }
+            } else {
+                // Reset Styles wenn Editor aus
+                // Wichtig: !important im CSS ist weg, also greifen diese Resets
+                el.style.border = '';
+                el.style.backgroundColor = '';
+                const badge = el.querySelector('.merged-indicator');
+                if(badge) badge.style.backgroundColor = '';
+            }
+        });
+    }
+
+    function toggleEditMode() {
+        if (isEditMode) stopEditMode();
+        else startEditMode(true);
+    }
+
+    function startEditMode(notify) {
+        isEditMode = true;
+        sessionStorage.setItem('editorMode', 'true');
+        document.getElementById('editorControls').style.display = 'flex';
+        document.body.classList.add('edit-mode-active');
+        document.getElementById('toggleEditorBtn').classList.add('active');
+
+        resetSelection();
+        colorizeGroups();
+
+        if(notify) showToast("Editor aktiv. Wähle Tische zum Bearbeiten.", 'success');
+    }
+
+    function stopEditMode() {
+        isEditMode = false;
+        sessionStorage.setItem('editorMode', 'false');
+        document.getElementById('editorControls').style.display = 'none';
+        document.body.classList.remove('edit-mode-active');
+        document.getElementById('toggleEditorBtn').classList.remove('active');
+
+        resetSelection();
+        colorizeGroups(); // Farben entfernen
+    }
+
+    function resetSelection() {
+        selectedTableIds = [];
+        document.querySelectorAll('.table-item').forEach(el => {
+            el.classList.remove('selected-in-editor');
+        });
+        updateEditorUI();
+    }
+
+    function onTableClick(el) {
+        if (isEditMode) handleEditorClick(el);
+        else if (typeof handleTableClick === "function") handleTableClick(el);
+    }
+
+    function handleEditorClick(el) {
+        const tid = el.getAttribute('data-table-id');
+
+        // Einfaches Toggle der Selektion
+        if (selectedTableIds.includes(tid)) {
+            selectedTableIds = selectedTableIds.filter(id => id !== tid);
+            el.classList.remove('selected-in-editor');
+        } else {
+            selectedTableIds.push(tid);
+            el.classList.add('selected-in-editor');
+        }
+
+        updateEditorUI();
+    }
+
+    function updateEditorUI() {
+        const btnConnect = document.getElementById('btnConnectTables');
+        const btnDissolve = document.getElementById('btnDissolveGroup');
+        const status = document.getElementById('editorStatusText');
+
+        // Logik:
+        // Connect aktiv wenn >= 2 Tische gewählt
+        // Dissolve aktiv wenn >= 1 Tisch gewählt, der verbunden ist
+
+        let connectPossible = (selectedTableIds.length >= 2);
+
+        // Prüfen ob einer der gewählten Tische verbunden ist
+        let dissolvePossible = false;
+        if (selectedTableIds.length > 0) {
+            // Wir müssen durchsuchen, ob die gewählten IDs das attribut data-merged="true" haben
+            // Da wir nur die IDs im Array haben, suchen wir im DOM
+            for (let tid of selectedTableIds) {
+                const el = document.querySelector(`.table-item[data-table-id="${tid}"]`);
+                if (el && el.getAttribute('data-merged') === 'true') {
+                    dissolvePossible = true;
+                    break;
+                }
+            }
+        }
+
+        btnConnect.disabled = !connectPossible;
+        btnDissolve.disabled = !dissolvePossible;
+
+        status.innerText = `${selectedTableIds.length} Tisch(e) ausgewählt.`;
+    }
+
+    function openConnectModal() {
+        document.getElementById('connectCount').innerText = selectedTableIds.length;
+        document.getElementById('connectModal').classList.add('active');
+    }
+
+    function executeMerge() {
+        fetch('/api/tische_verbinden', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tables: selectedTableIds})
+        }).then(r => r.json()).then(d => {
+            if(d.success) {
+                sessionStorage.setItem('editorMessage', 'Tische erfolgreich verbunden!');
+                window.location.reload();
+            } else showToast("Fehler: " + d.message, 'error');
+        });
+    }
+
+    function openDissolveModal() {
+        // Zählen wie viele der gewählten Tische verbunden sind für den Text
+        let count = 0;
+        for (let tid of selectedTableIds) {
+             const el = document.querySelector(`.table-item[data-table-id="${tid}"]`);
+             if (el && el.getAttribute('data-merged') === 'true') count++;
+        }
+        document.getElementById('dissolveCount').innerText = count;
+        document.getElementById('dissolveModal').classList.add('active');
+    }
+
+    function executeDissolve() {
+        fetch('/api/tische_trennen', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tables: selectedTableIds}) // Liste senden!
+        }).then(r => r.json()).then(d => {
+            if(d.success) {
+                sessionStorage.setItem('editorMessage', 'Verbindungen aufgelöst!');
+                window.location.reload();
+            } else showToast("Fehler beim Trennen.", 'error');
+        });
+    }
+
+    function showToast(msg, type='success') {
+        const x = document.getElementById("notificationToast");
+        x.innerText = msg;
+        x.className = "show " + type;
+        setTimeout(()=>{ x.className = x.className.replace("show", ""); }, 3000);
+    }
+
+    function closeOccupiedTableInfoModal() { document.getElementById('occupiedTableInfoModal').classList.remove('active'); }
+    function closeConfirmAddReservationModal() { document.getElementById('confirmAddReservationToOccupiedTableModal').classList.remove('active'); }
+</script>
+{% endblock %}

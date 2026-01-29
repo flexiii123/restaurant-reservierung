@@ -1,3 +1,5 @@
+# --- START OF FILE app.py ---
+
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 import datetime, os
 import calendar
@@ -7,7 +9,7 @@ from core.models import ALL_TABLES, ALL_ROOMS, ALL_RESOURCES, Reservation, Reser
 from core.translations import TRANSLATIONS
 import logging
 
-logging.basicConfig(level=logging.DEBUG, # Setze das gewünschte globale Level
+logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s')
 
 app = Flask(__name__)
@@ -20,13 +22,12 @@ USERS = {
 
 if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or not app.debug:
     with app.app_context():
-        # Rufe hier die manager-Funktionen auf, die beim Start ausgeführt werden sollen
-        # z.B. auch manager.cleanup_old_backups(), wenn du es nicht nach jedem Speichern machen willst
-        pass # Dein Initialisierungscode
+        pass
 
 with app.app_context():
     print("Führe initiale Bereinigung alter Reservierungen durch...")
     manager.cleanup_old_reservations()
+
 
 def get_table_display_name_by_id(table_id):
     for t in ALL_RESOURCES:
@@ -58,13 +59,10 @@ def inject_global_vars():
 
 @app.context_processor
 def inject_translations():
-    # Standardsprache ist Deutsch ('de')
     current_lang = session.get('language', 'de')
-
-    # Hole das Wörterbuch für die aktuelle Sprache
     texts = TRANSLATIONS.get(current_lang, TRANSLATIONS['de'])
-
     return dict(t=texts, current_lang=current_lang)
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -73,7 +71,6 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
 
-        # Prüfen ob Benutzer existiert und Passwort stimmt
         if username in USERS and USERS[username] == password:
             session['logged_in'] = True
             session['username'] = username
@@ -85,36 +82,35 @@ def login():
 
     return render_template('login.html', error=error)
 
+
 @app.before_request
 def require_login():
-    # Liste der Endpunkte, die man OHNE Login sehen darf
     allowed_routes = ['login', 'static']
-
-    # Wenn der Benutzer nicht eingeloggt ist UND die Seite nicht erlaubt ist -> Login
     if 'logged_in' not in session and request.endpoint not in allowed_routes:
-        # Ein kleiner Check, damit statische Dateien (CSS/JS) nicht blockiert werden
         if request.endpoint and 'static' in request.endpoint:
             return
-
         return redirect(url_for('login'))
+
 
 @app.route('/logout')
 def logout():
-    session.clear() # Löscht alle Daten aus der Sitzung
+    session.clear()
     return redirect(url_for('login'))
+
 
 @app.route('/set_language/<lang_code>')
 def set_language(lang_code):
     if lang_code in ['de', 'it', 'en']:
         session['language'] = lang_code
     return redirect(request.referrer or url_for('index'))
+
+
 @app.route('/')
 def index():
     current_date_obj = datetime.date.today()
     default_date_str = current_date_obj.strftime("%Y-%m-%d")
 
     selected_date_str = request.args.get('date', default_date_str)
-
     try:
         datetime.datetime.strptime(selected_date_str, "%Y-%m-%d")
     except ValueError:
@@ -125,7 +121,9 @@ def index():
         selected_shift = Reservation.SHIFT_DINNER
 
     all_reservations_objects = manager.load_reservations()
+    merges = manager.load_merges()
 
+    # Filterung für TISCHE (genauer Match von Datum und Schicht)
     reservations_for_selected_date_and_shift = []
     for res_obj in all_reservations_objects:
         if res_obj.date == selected_date_str and res_obj.shift == selected_shift:
@@ -133,6 +131,14 @@ def index():
 
     display_tables_data = []
     for table_model in ALL_TABLES:
+        merged_with_list = merges.get(table_model.id, [])
+
+        group_id_str = ""
+        if merged_with_list:
+            all_ids = [table_model.id] + merged_with_list
+            all_ids.sort()
+            group_id_str = "-".join(all_ids)
+
         table_data = {
             'id': table_model.id,
             'area': table_model.area,
@@ -140,17 +146,18 @@ def index():
             'display_name': table_model.display_name,
             'row': table_model.row,
             'number_in_row': table_model.number_in_row,
-            'type': table_model.type,  # <<<< HIER DAS 'type'-ATTRIBUT HINZUFÜGEN
+            'type': table_model.type,
             'status': "frei",
-            'reservations_on_table': []
+            'reservations_on_table': [],
+            'merged_with': merged_with_list,
+            'group_id': group_id_str
         }
 
-        current_table_reservations_details_for_display = []  # Für die Anzeige aller Reservierungen dieses Tisches
-        is_table_actively_occupied = False  # Ist der Tisch *momentan* durch einen anwesenden Gast belegt?
+        current_table_reservations_details_for_display = []
+        is_table_actively_occupied = False
 
-        for res_obj in reservations_for_selected_date_and_shift:  # Diese sollten volle Reservation-Objekte sein
+        for res_obj in reservations_for_selected_date_and_shift:
             if res_obj.table_id == table_model.id:
-                # Details für die Anzeige im Tischkasten sammeln (alle Reservierungen des Tages)
                 current_table_reservations_details_for_display.append({
                     'id': res_obj.id,
                     'name': res_obj.name,
@@ -158,27 +165,22 @@ def index():
                     'persons': res_obj.persons,
                     'info': res_obj.info,
                     'arrived': res_obj.arrived,
-                    'departed': getattr(res_obj, 'departed', False)  # Sicherstellen, dass departed vorhanden ist
+                    'departed': getattr(res_obj, 'departed', False)
                 })
-
-                # Prüfen, ob der Tisch DURCH DIESE Reservierung AKTIV BELEGT ist
                 if res_obj.arrived and not getattr(res_obj, 'departed', False):
                     is_table_actively_occupied = True
 
-        # Setze den Gesamtstatus des Tisches
         if is_table_actively_occupied:
             table_data['status'] = 'belegt'
-        # Sonst bleibt er 'frei' (Standardwert)
+        elif current_table_reservations_details_for_display:
+            table_data['status'] = 'belegt'
 
-        # Füge die gesammelten Reservierungsdetails (für die Anzeige) zum Tisch hinzu, sortiert nach Zeit
         if current_table_reservations_details_for_display:
             table_data['reservations_on_table'] = sorted(
                 current_table_reservations_details_for_display,
                 key=lambda r: datetime.datetime.strptime(r['time'], "%H:%M").time() if r.get(
                     'time') else datetime.time.min
             )
-            # Die Anzeige, ob der Tisch generell Reservierungen hat, ist in 'reservations_on_table'.
-            # Der 'status' (frei/belegt) spiegelt die *aktuelle* Belegung wider.
 
         display_tables_data.append(table_data)
 
@@ -211,8 +213,8 @@ def generate_time_slots(start_hour, start_minute, end_hour, end_minute, interval
 @app.route('/reservieren', methods=['GET'])
 def reservation_form_page():
     table_id = request.args.get('table_id')
-    # Falls kein Tischname da ist, ID nutzen
-    table_name = request.args.get('table_name', get_table_display_name_by_id(table_id) if table_id else "Gewünschter Tisch")
+    table_name = request.args.get('table_name',
+                                  get_table_display_name_by_id(table_id) if table_id else "Gewünschter Tisch")
 
     selected_date_from_url = request.args.get('date')
     final_selected_date = datetime.date.today().strftime("%Y-%m-%d")
@@ -236,12 +238,11 @@ def reservation_form_page():
     available_times = []
     if table_id:
         for time_slot in possible_times_for_current_shift:
-            # HIER WAR DER FEHLER: Wir übergeben die Argumente jetzt direkt passend zur neuen manager.py
             if manager.is_table_available_for_specific_reservation_time(
-                    table_id,                # War table_id_to_check
-                    final_selected_date,     # War date_str_to_check
-                    time_slot,               # War time_str_to_check
-                    current_shift_from_url   # War shift_to_check
+                    table_id,
+                    final_selected_date,
+                    time_slot,
+                    current_shift_from_url
             ):
                 available_times.append(time_slot)
     else:
@@ -258,6 +259,43 @@ def reservation_form_page():
         available_times=available_times,
         reservation_data=None
     )
+
+
+@app.route('/api/tische_verbinden', methods=['POST'])
+def api_merge_tables():
+    data = request.get_json()
+    tables_list = data.get('tables')
+
+    if not tables_list and data.get('table1') and data.get('table2'):
+        tables_list = [data.get('table1'), data.get('table2')]
+
+    if tables_list and len(tables_list) >= 2:
+        manager.merge_tables(tables_list)
+        return jsonify({"success": True})
+
+    return jsonify({"success": False, "message": "Zu wenige Tische ausgewählt."}), 400
+
+
+@app.route('/api/tische_trennen', methods=['POST'])
+def api_unmerge_tables():
+    data = request.get_json()
+    # Support für Listen
+    tables_list = data.get('tables')
+
+    # Fallback Einzel-ID (Legacy)
+    tid = data.get('table_id')
+
+    if tables_list:
+        if manager.unmerge_tables(tables_list):
+            return jsonify({"success": True})
+    elif tid:
+        # Falls unmerge_tables nur Liste erwartet, packe es ein.
+        # Falls manager.py noch "unmerge_table" hat, hier nutzen.
+        # Da der Code oben unmerge_tables mit Liste zeigte:
+        if manager.unmerge_tables([tid]):
+            return jsonify({"success": True})
+
+    return jsonify({"success": False}), 400
 
 
 @app.route('/reservierung_bearbeiten/<string:reservation_id>', methods=['GET'])
@@ -277,7 +315,6 @@ def edit_reservation_page(reservation_id):
 
     available_times = []
     for time_slot in possible_times_for_current_shift:
-        # HIER EBENFALLS ANPASSEN:
         if manager.is_table_available_for_specific_reservation_time(
                 reservation_object.table_id,
                 reservation_object.date,
@@ -310,92 +347,107 @@ def edit_reservation_page(reservation_id):
 
 @app.route('/reservierungen')
 def reservations_list_page():
-    # ... (Filter Logik wie bisher) ...
     filter_date_param = request.args.get('filter_date')
     filter_shift_param = request.args.get('shift', Reservation.SHIFT_DINNER)
 
-    # ... (Datum Logik wie bisher) ...
     current_date_obj = datetime.date.today()
     today_str = current_date_obj.strftime("%Y-%m-%d")
-    min_filter_date_str = (current_date_obj - timedelta(days=manager.MAX_RESERVATION_AGE_DAYS)).strftime("%Y-%m-%d")
 
     all_raw_reservations = manager.load_reservations()
+    merges = manager.load_merges()
+
     reservations_processed = []
 
     for res_obj in all_raw_reservations:
-        res_dict = res_obj.to_dict()
-        res_dict['table_display_name'] = get_table_display_name_by_id(res_obj.table_id)
-        res_dict['display_date'] = format_date_european(res_obj.date)
+        if "[LINKED:" in res_obj.info:
+            continue
 
-        # NEU: Abreisedatum formatieren
+        res_dict = res_obj.to_dict()
+
+        t_name = get_table_display_name_by_id(res_obj.table_id)
+        if res_obj.table_id in merges:
+            partners = merges[res_obj.table_id]
+            partner_names = [get_table_display_name_by_id(p) for p in partners]
+            t_name += f" (+ {', '.join(partner_names)})"
+
+        res_dict['table_display_name'] = t_name
+        res_dict['display_date'] = format_date_european(res_obj.date)
         res_dict['display_end_date'] = format_date_european(res_obj.end_date)
 
-        # NEU: Versuchen, die Checkout-Zeit aus der Info zu holen (Format: "| Abreise: HH:MM")
-        res_dict['checkout_time'] = "10:00"  # Standard
+        res_dict['checkout_time'] = "10:00"
         if "Abreise:" in res_obj.info:
             try:
-                # Simple string split logic
-                parts = res_obj.info.split("Abreise:")
-                if len(parts) > 1:
-                    time_part = parts[1].strip().split(" ")[0]  # Nimmt die Zeit
-                    res_dict['checkout_time'] = time_part
-                    # Info bereinigen für die Anzeige (optional)
-                    # res_dict['info'] = parts[0].replace("|", "").strip()
+                res_dict['checkout_time'] = res_obj.info.split("Abreise:")[1].strip().split(" ")[0]
             except:
                 pass
 
         reservations_processed.append(res_dict)
 
     current_page_reservations = []
-    active_picker_date = today_str
-    page_title = "Reservierungen"
 
-    # ... (Filter Logik Datum/Shift wie bisher) ...
+    # --- UPDATE: Filter Logik für Zimmer (Schicht ignorieren, Datum ignorieren wenn leer) ---
     if filter_date_param is None:
-        current_page_reservations = [r for r in reservations_processed if
-                                     r.get('date') == today_str and r.get('shift') == filter_shift_param]
-        page_title = f"Reservierungen für heute ({filter_shift_param})"
+        # Default: Heute, aber für Zimmer auch laufende
+        target_date = today_str
+        target_shift = filter_shift_param
     elif filter_date_param == "":
-        # Bei "Alle anzeigen" wollen wir bei Zimmern vielleicht alle zukünftigen sehen
-        current_page_reservations = [r for r in reservations_processed if r.get('date') >= today_str]
-        # Falls Shift gefiltert werden soll, hier einkommentieren. Bei Zimmern ist Shift meist egal.
-        # Aber um konsistent zu Tischen zu bleiben, filtern wir Shift nur bei Tischen (machen wir unten beim Split)
-        page_title = "Alle zukünftigen Reservierungen"
-        active_picker_date = ""
+        # Alle ab heute
+        target_date = None
+        target_shift = None
     else:
-        current_page_reservations = [r for r in reservations_processed if
-                                     r.get('date') == filter_date_param and r.get('shift') == filter_shift_param]
-        page_title = f"Reservierungen am {format_date_european(filter_date_param)}"
-        active_picker_date = filter_date_param
+        target_date = filter_date_param
+        target_shift = filter_shift_param
 
-    # ... (Sortier Logik wie bisher) ...
-    sort_by_param = request.args.get('sort_by', 'table_display_name')
-    sort_order_param = request.args.get('order', 'asc')
-    reverse_order = (sort_order_param == 'desc')
+    for r in reservations_processed:
+        is_room = "zimmer" in str(r.get('table_id', '')).lower()
 
-    current_page_reservations.sort(key=lambda r: str(r.get(sort_by_param, '')), reverse=reverse_order)
+        # 1. Datum Filter
+        date_match = False
+        if target_date is None:
+            # "Alle anzeigen" -> ab heute
+            if r.get('date') >= today_str or (is_room and r.get('end_date') >= today_str):
+                date_match = True
+        else:
+            if not is_room:
+                if r.get('date') == target_date:
+                    date_match = True
+            else:
+                # Zimmer: Ist das Filter-Datum im gebuchten Zeitraum?
+                # [start, end) Prinzip oder [start, end] ? Hier meist [Start, Ende)
+                # Aber für Listenansicht zeigen wir meist den Starttag.
+                # Wenn wir filtern wollen "Wer ist heute im Haus?", müssen wir Ranges prüfen.
+                # ABER: Die Listenansicht zeigt meist "Anreisen".
+                # Wir belassen es hier auf Anreise-Datum für die Liste, sonst wird es unübersichtlich.
+                if r.get('date') == target_date:
+                    date_match = True
 
-    next_sort_order_dict = {k: ('desc' if sort_by_param == k and sort_order_param == 'asc' else 'asc') for k in
-                            ['name', 'table_display_name', 'date', 'time', 'persons']}
+        # 2. Schicht Filter (Nur für Tische relevant)
+        shift_match = False
+        if is_room:
+            shift_match = True  # Zimmer immer anzeigen egal welche Schicht
+        else:
+            if target_shift is None or r.get('shift') == target_shift:
+                shift_match = True
 
-    # SPLIT: Tische vs Zimmer
-    # WICHTIG: Tische filtern wir streng nach Schicht. Zimmer zeigen wir unabhängig von der Schicht an, wenn Datum passt (oder wir lassen die Filterung oben)
+        if date_match and shift_match:
+            current_page_reservations.append(r)
 
+    # Split
     reservations_rooms = [r for r in current_page_reservations if 'zimmer' in str(r.get('table_id', '')).lower()]
     reservations_tables = [r for r in current_page_reservations if 'zimmer' not in str(r.get('table_id', '')).lower()]
+
+    # Sortieren
+    reservations_tables.sort(key=lambda x: x['time'])
+    reservations_rooms.sort(key=lambda x: x['date'])
 
     return render_template(
         'reservations_list.html',
         reservations_tables=reservations_tables,
         reservations_rooms=reservations_rooms,
-        active_filter_date=active_picker_date,
-        page_title=page_title,
-        current_sort_by=sort_by_param,
-        current_sort_order=sort_order_param,
-        next_sort_order=next_sort_order_dict,
-        min_filter_date=min_filter_date_str,
+        active_filter_date=filter_date_param if filter_date_param is not None else today_str,
         available_shifts=Reservation.VALID_SHIFTS,
-        current_filter_shift=filter_shift_param
+        current_filter_shift=filter_shift_param,
+        page_title="Reservierungen"
     )
 
 
@@ -409,7 +461,6 @@ def room_booking_calendar():
         year = today.year
         month = today.month
 
-    # Nächster Monat für die Anzeige (Rechte Seite)
     next_month_val = month + 1
     next_year_val = year
     if next_month_val > 12:
@@ -423,15 +474,12 @@ def room_booking_calendar():
     month_names = {1: 'Januar', 2: 'Februar', 3: 'März', 4: 'April', 5: 'Mai', 6: 'Juni', 7: 'Juli', 8: 'August',
                    9: 'September', 10: 'Oktober', 11: 'November', 12: 'Dezember'}
 
-    # LOGIK FIX FÜR NAVIGATION (Schieben um 1 Monat)
-    # Vorheriger Monat
     prev_m = month - 1
     prev_y = year
     if prev_m < 1:
         prev_m = 12
         prev_y = year - 1
 
-    # Nächster Monat (Startmonat + 1)
     next_m = month + 1
     next_y = year
     if next_m > 12:
@@ -446,7 +494,6 @@ def room_booking_calendar():
         m2_name=month_names[next_month_val],
         year1=year, month1=month,
         year2=next_year_val, month2=next_month_val,
-        # Hier die korrigierten URLs:
         prev_month_url=url_for('room_booking_calendar', year=prev_y, month=prev_m),
         next_month_url=url_for('room_booking_calendar', year=next_y, month=next_m)
     )
@@ -460,7 +507,6 @@ def api_create_reservation():
         is_room = "zimmer" in table_id.lower()
 
         if is_room:
-            # --- ZIMMER LOGIK (ist korrekt und bleibt so) ---
             if not manager.is_room_available(table_id, data['date'], data['end_date']):
                 return jsonify({"success": False, "message": "Zimmer im gewählten Zeitraum bereits belegt."}), 409
 
@@ -475,31 +521,26 @@ def api_create_reservation():
             })
 
         else:
-            # --- TISCH LOGIK ---
             if not manager.is_table_available_for_specific_reservation_time(
                     table_id, data['date'], data['time'], data['shift']
             ):
                 return jsonify({"success": False, "message": "Tisch zur gewählten Zeit bereits belegt."}), 409
 
-            # Hier wird die Reservierung erstellt
             manager.create_reservation(
                 name=data['name'], date=data['date'], time=data['time'], persons=int(data['persons']),
                 table_id=table_id, info=data.get('info', ""), shift=data['shift']
             )
 
-            # ----- START DER KORREKTUR -----
-            # Wir geben jetzt direkt die einfache URL zurück, ohne den "highlight"-Teil.
             return jsonify({
                 "success": True,
                 "message": "Tisch erfolgreich reserviert!",
                 "redirect_url": url_for('index', date=data['date'], shift=data['shift'])
             })
-            # ----- ENDE DER KORREKTUR -----
 
     except Exception as e:
         app.logger.error(f"Fehler beim Erstellen einer Reservierung: {e}", exc_info=True)
-        # HTTP Status 500 für Internal Server Error
         return jsonify({"success": False, "message": f"Ein Serverfehler ist aufgetreten: {str(e)}"}), 500
+
 
 @app.route('/api/freie_zimmer_suchen', methods=['POST'])
 def api_search_rooms():
@@ -508,8 +549,7 @@ def api_search_rooms():
     end = data.get('end_date')
 
     free_rooms = []
-    # Alle Zimmer durchgehen
-    for room in ALL_ROOMS:  # Import sicherstellen!
+    for room in ALL_ROOMS:
         if manager.is_room_available(room.id, start, end):
             free_rooms.append({
                 "id": room.id,
@@ -533,13 +573,8 @@ def api_update_reservation(reservation_id):
         is_room = "zimmer" in table_id.lower()
 
         if is_room:
-            # ZIMMER UPDATE
             start_date = data.get('date', original_res.date)
-            # end_date aus dem Request holen oder vom Original
             end_date = data.get('end_date', original_res.end_date)
-
-            # Hinweis: Eine echte Verfügbarkeitsprüfung beim Update ist komplex (man muss sich selbst ignorieren).
-            # Wir speichern hier direkt das Update.
 
             manager.update_reservation(
                 reservation_id_to_update=reservation_id,
@@ -552,23 +587,17 @@ def api_update_reservation(reservation_id):
                 shift="abend"
             )
 
-            # Manuelles Update für end_date, da update_reservation das ggf. noch nicht unterstützt hat in alten Versionen
-            # (Falls du update_reservation im Manager noch nicht angepasst hast)
             res = manager.get_reservation_by_id(reservation_id)
             res.end_date = end_date
-            # Erzwinge Speichern
             manager.save_reservations(manager.load_reservations())
 
         else:
-            # TISCH UPDATE
             target_date = data.get('date', original_res.date)
             target_time = data.get('time', original_res.time)
             target_shift = data.get('shift', original_res.shift)
 
-            # Nur prüfen, wenn sich relevante Daten geändert haben
             if (
                     target_date != original_res.date or target_time != original_res.time or target_shift != original_res.shift):
-                # AUCH HIER KORRIGIERT: Argumente ohne Keywords
                 if not manager.is_table_available_for_specific_reservation_time(
                         table_id, target_date, target_time, target_shift, reservation_id_to_ignore=reservation_id):
                     return jsonify({"success": False, "message": "Tisch ist zur neuen Zeit belegt."}), 409
@@ -589,6 +618,7 @@ def api_update_reservation(reservation_id):
     except Exception as e:
         app.logger.error(f"Fehler beim Update: {e}", exc_info=True)
         return jsonify({"success": False, "message": f"Serverfehler: {str(e)}"}), 500
+
 
 @app.route('/api/reservierung_loeschen/<string:reservation_id>', methods=['DELETE'])
 def api_delete_reservation(reservation_id):
@@ -679,11 +709,9 @@ def api_toggle_arrival(reservation_id):
     else:
         return jsonify({"success": False, "message": "Reservierung nicht gefunden."}), 404
 
+
 @app.route('/api/reservierung_gegangen/<string:reservation_id>', methods=['POST'])
 def api_mark_as_departed(reservation_id):
-    """
-    API-Endpunkt, um eine Reservierung als 'gegangen' zu markieren.
-    """
     if not reservation_id:
         return jsonify({"success": False, "message": "Keine Reservierungs-ID angegeben."}), 400
 
@@ -694,7 +722,7 @@ def api_mark_as_departed(reservation_id):
             "success": True,
             "message": f"Reservierung für '{updated_reservation.name}' als gegangen markiert.",
             "reservation_id": updated_reservation.id,
-            "arrived": updated_reservation.arrived, # Sende auch den arrived Status mit
+            "arrived": updated_reservation.arrived,
             "departed": updated_reservation.departed
         })
     else:
@@ -704,10 +732,10 @@ def api_mark_as_departed(reservation_id):
             status_code = 404
         elif reservation_check.departed:
             message = "Reservierung war bereits als gegangen markiert."
-            status_code = 409 # Conflict, da bereits im gewünschten Zustand
+            status_code = 409
         else:
             message = "Fehler beim Markieren der Reservierung als gegangen."
-            status_code = 500 # Allgemeiner Serverfehler
+            status_code = 500
 
         return jsonify({"success": False, "message": message}), status_code
 
@@ -718,19 +746,42 @@ def rooms_index():
     default_date_str = current_date_obj.strftime("%Y-%m-%d")
     selected_date_str = request.args.get('date', default_date_str)
 
-    # Schicht ist bei Zimmern meistens egal, aber wir behalten die Logik bei,
-    # damit das System konsistent bleibt. Standardmäßig "Abend" (oder man könnte "Nacht" nennen).
+    # Konvertieren für Vergleich
+    try:
+        check_date = datetime.datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+    except ValueError:
+        check_date = current_date_obj
+
+    # Schicht wird bei Zimmern ignoriert für die Anzeige
     selected_shift = request.args.get('shift', Reservation.SHIFT_DINNER)
 
     all_reservations_objects = manager.load_reservations()
 
-    # Filter Reservierungen für den Tag
-    reservations_for_date = [r for r in all_reservations_objects
-                             if r.date == selected_date_str and r.shift == selected_shift]
+    # --- KORRIGIERTE LOGIK: Datumsbereichsprüfung für Zimmer ---
+    reservations_for_date = []
+    for r in all_reservations_objects:
+        # Ist es ein Zimmer?
+        if "zimmer" in r.table_id.lower():
+            # Datum parsen
+            try:
+                r_start = datetime.datetime.strptime(r.date, "%Y-%m-%d").date()
+                # Fallback falls kein end_date (sollte nicht passieren bei Zimmern)
+                r_end_str = getattr(r, 'end_date', r.date)
+                r_end = datetime.datetime.strptime(r_end_str, "%Y-%m-%d").date()
+
+                # Check: Liegt das ausgewählte Datum im Bereich [Anreise, Abreise)?
+                # Ein Gast der am 1. anreist und am 3. abreist, ist am 1. und 2. da.
+                if r_start <= check_date < r_end:
+                    reservations_for_date.append(r)
+                # Sonderfall: Wenn Anreise = Abreise (Tageszimmer), dann exakter Match
+                elif r_start == r_end == check_date:
+                    reservations_for_date.append(r)
+
+            except ValueError:
+                continue
 
     display_rooms_data = []
 
-    # Hier iterieren wir über ALL_ROOMS statt ALL_TABLES
     for room_model in ALL_ROOMS:
         room_data = {
             'id': room_model.id,
@@ -754,7 +805,6 @@ def rooms_index():
                     'arrived': res_obj.arrived,
                     'departed': getattr(res_obj, 'departed', False)
                 })
-                # Wenn jemand drauf ist, ist das Zimmer belegt
                 if not getattr(res_obj, 'departed', False):
                     is_occupied = True
 
@@ -764,13 +814,13 @@ def rooms_index():
         display_rooms_data.append(room_data)
 
     return render_template(
-        'rooms.html',  # Neues Template
+        'rooms.html',
         rooms=display_rooms_data,
         selected_date=selected_date_str,
         selected_shift=selected_shift,
         valid_shifts=Reservation.VALID_SHIFTS
     )
 
+
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=5001)
-    pass

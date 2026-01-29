@@ -3,7 +3,7 @@ import os
 import shutil
 import glob
 from datetime import datetime, date, timedelta
-from .models import Reservation, ALL_RESOURCES
+from .models import Reservation, ALL_RESOURCES, ALL_ROOMS
 import tempfile
 import logging
 
@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_FILE = os.path.join(BASE_DIR, 'data', 'reservations.json')
+MERGE_FILE = os.path.join(BASE_DIR, 'data', 'table_merges.json')
 BACKUP_DIR = os.path.join(BASE_DIR, 'data', 'backups')
 MAX_BACKUPS_TO_KEEP = 10
 MAX_RESERVATION_AGE_DAYS = 7
@@ -206,14 +207,16 @@ def save_reservations(reservations_objects_list):
 
 def cleanup_old_reservations():
     res = load_reservations()
-    limit = date.today() - timedelta(days=7)  # date.today() nutzen
+    limit = date.today() - timedelta(days=7)
     new_res = []
     for r in res:
         try:
-            # Hier nutzen wir datetime.strptime, weil wir String parsen
             if datetime.strptime(r.date, "%Y-%m-%d").date() >= limit:
                 new_res.append(r)
-        except ValueError:
+        except (ValueError, TypeError):
+            # Falls Datum korrupt, behalten oder löschen?
+            # Besser behalten und loggen, hier löschen wir es sicherheitshalber nicht
+            # außer es ist extrem alt. Wir behalten es hier mal.
             new_res.append(r)
 
     if len(new_res) < len(res): save_reservations(new_res)
@@ -221,15 +224,43 @@ def cleanup_old_reservations():
 import uuid
 
 
-def create_reservation(name, date, time, persons, table_id, info, shift, end_date=None):
+def create_reservation(name, date, time, persons, table_id, info, shift, end_date=None, parent_id=None):
     res = load_reservations()
-    # Wenn kein end_date angegeben, ist es = date (für Tische)
+    my_id = str(uuid.uuid4())
     if not end_date: end_date = date
 
-    new_r = Reservation(str(uuid.uuid4()), name, date, time, persons, table_id, info, shift=shift,
-                        end_date_str=end_date)
+    # NEU: Wenn es eine Hauptbuchung ist, schauen wir nach Partnern
+    # und schreiben deren Namen in die Info, damit man es in der Liste sieht.
+    partners_display = ""
+    merges = load_merges()
+
+    if parent_id is None and table_id in merges:
+        # Wir holen uns die Namen der Partner-Tische für die Anzeige (optional, aber schick)
+        # (Da wir hier keinen Zugriff auf ALL_TABLES DisplayNames haben, lassen wir es im Info-Text
+        #  oder lösen es später in app.py. Wir markieren es nur.)
+        pass
+
+    new_r = Reservation(my_id, name, date, time, persons, table_id, info, False, False, shift, end_date)
+
+    if parent_id:
+        new_r.info = f"[LINKED:{parent_id}] {info}"  # Markierung für Schattenbuchung
+
     res.append(new_r)
     save_reservations(res)
+
+    # Schattenbuchungen erstellen
+    if parent_id is None:
+        if table_id in merges:
+            partners = merges[table_id]
+            for partner_id in partners:
+                create_reservation(
+                    name=f"{name}",  # Gleicher Name
+                    date=date, time=time, persons=0,
+                    table_id=partner_id,
+                    info="Automatisch verbunden",
+                    shift=shift, end_date=end_date,
+                    parent_id=my_id
+                )
     return new_r
 
 
@@ -297,12 +328,34 @@ def update_reservation(reservation_id_to_update, name=None, date_str=None, time_
             return res
     return None
 
-def delete_reservation(reservation_id_to_delete):
-    all_reservations = load_reservations()
-    initial_length = len(all_reservations)
-    updated_reservations = [res for res in all_reservations if res.id != reservation_id_to_delete]
-    if len(updated_reservations) < initial_length:
-        save_reservations(updated_reservations)
+
+def delete_reservation(rid):
+    all_res = load_reservations()
+
+    # Finde die zu löschende Reservierung
+    target = None
+    for r in all_res:
+        if r.id == rid: target = r; break
+
+    if not target: return False
+
+    # Logik: Wir müssen die ID finden UND alle, die [LINKED:ID] in der Info haben
+    new_res_list = []
+    for r in all_res:
+        # 1. Es ist die Reservierung selbst
+        if r.id == rid: continue
+
+        # 2. Es ist eine Schatten-Reservierung dieser ID (via Info Tag check)
+        if f"[LINKED:{rid}]" in r.info: continue
+
+        # 3. Falls wir eine Schatten-Reservierung löschen, sollten wir das Original löschen?
+        # (Optional, hier löschen wir nur das angeklickte Element um Fehler zu vermeiden,
+        # aber idealerweise löscht man immer den Parent)
+
+        new_res_list.append(r)
+
+    if len(new_res_list) < len(all_res):
+        save_reservations(new_res_list)
         return True
     return False
 
@@ -332,35 +385,130 @@ def is_table_available_for_specific_reservation_time(table_id, date, time, shift
 from .models import ALL_TABLES, ALL_RESOURCES
 from datetime import timedelta
 
-def get_available_tables_for_moving(original_res):
-    available = []
-    for t in ALL_RESOURCES:
-        if t.id == original_res.table_id: continue
-        # Wenn es ein Zimmer ist, prüfen wir den Zeitraum
-        if "zimmer" in t.id and "zimmer" in original_res.table_id:
-             if is_room_available(t.id, original_res.date, original_res.end_date, original_res.id):
-                 available.append(t)
-        # Sonst normale Tischprüfung
-        elif is_table_available_for_specific_reservation_time(t.id, original_res.date, original_res.time, original_res.shift, original_res.id):
-            available.append(t)
-    return available
 
+def get_available_tables_for_moving(original_res):
+    """
+    Gibt verfügbare Ziele zurück.
+    Logik:
+    1. Wenn Zimmer -> Nur Zimmer anzeigen.
+    2. Wenn Tisch -> Nur Tische anzeigen (keine Zimmer).
+    3. Wenn Tisch-Gruppe -> Nur Gruppen gleicher Größe anzeigen.
+    """
+    if not original_res: return []
+
+    available_tables = []
+    merges = load_merges()
+
+    # Prüfen: Ist der Ursprung ein Zimmer?
+    source_is_room = "zimmer" in original_res.table_id.lower()
+
+    # Prüfen: Wie groß ist die Ursprungsgruppe?
+    source_partners = merges.get(original_res.table_id, [])
+    source_group_size = 1 + len(source_partners)  # 1 (selbst) + Partner
+
+    # Welche Liste durchsuchen wir?
+    # Wenn Zimmer -> ALL_ROOMS, Wenn Tisch -> ALL_TABLES
+    target_list = ALL_ROOMS if source_is_room else ALL_TABLES
+
+    for target in target_list:
+        # Sich selbst überspringen
+        if target.id == original_res.table_id:
+            continue
+
+        # --- VERFÜGBARKEITS-CHECK ---
+        is_free = False
+        if source_is_room:
+            # Zimmer-Check (Zeitraum)
+            is_free = is_room_available(target.id, original_res.date, original_res.end_date, original_res.id)
+        else:
+            # Tisch-Check (Slot)
+            is_free = is_table_available_for_specific_reservation_time(
+                target.id, original_res.date, original_res.time, original_res.shift, original_res.id
+            )
+
+        if not is_free:
+            continue
+
+        # --- GRUPPEN-GRÖSSEN-CHECK (Nur für Tische relevant) ---
+        if not source_is_room:
+            target_partners = merges.get(target.id, [])
+            target_group_size = 1 + len(target_partners)
+
+            # Wenn Größen ungleich sind -> Überspringen
+            # (z.B. Einzelner Tisch darf nicht auf 2er-Gruppe, 2er-Gruppe nicht auf Einzelnen)
+            if source_group_size != target_group_size:
+                continue
+
+        available_tables.append(target)
+
+    return available_tables
+
+
+# core/manager.py
 
 def move_reservation(rid, new_tid):
+    """
+    Verschiebt eine Reservierung.
+    WICHTIG: Behandelt verbundene Tische (Schatten-Reservierungen).
+    1. Löscht alte Schatten-Reservierungen auf den alten Partner-Tischen.
+    2. Verschiebt die Haupt-Reservierung.
+    3. Erstellt neue Schatten-Reservierungen auf den neuen Partner-Tischen (falls vorhanden).
+    """
+    # 1. Haupt-Reservierung holen
     r = get_reservation_by_id(rid)
-    if not r: return None
+    if not r:
+        return None
 
-    # Check ob Ziel frei ist
+    # Prüfen ob Ziel frei ist (Basis-Check)
+    # Bei Zimmern nutzen wir is_room_available, bei Tischen den Slot-Check
     is_free = False
-    if "zimmer" in new_tid:
+    if "zimmer" in new_tid.lower():
         is_free = is_room_available(new_tid, r.date, r.end_date, rid)
     else:
         is_free = is_table_available_for_specific_reservation_time(new_tid, r.date, r.time, r.shift, rid)
 
-    if is_free:
-        r.table_id = new_tid
-        return update_reservation(rid, r.name, r.date, r.time, r.persons, new_tid, r.info, r.shift)
-    return None
+    if not is_free:
+        return None
+
+    # 2. Alte Schatten-Reservierungen löschen
+    # Wir suchen alle Reservierungen, die diese ID als 'parent_id' im Info-Tag haben [LINKED:rid]
+    all_res = load_reservations()
+    res_to_keep = []
+    linked_tag = f"[LINKED:{rid}]"
+
+    for item in all_res:
+        if linked_tag in item.info:
+            # Das ist eine Schatten-Reservierung -> wir übernehmen sie NICHT in die neue Liste (löschen)
+            continue
+        res_to_keep.append(item)
+
+    # Speichern, damit die alten Schatten weg sind
+    save_reservations(res_to_keep)
+
+    # 3. Haupt-Reservierung aktualisieren
+    # Wir laden neu, da save_reservations oben den Cache geändert hat
+    # Aber wir nutzen unser 'r' Objekt weiter und updaten es dann
+    updated_r = update_reservation(rid, r.name, r.date, r.time, r.persons, new_tid, r.info, r.shift)
+
+    # 4. Neue Schatten-Reservierungen erstellen (nur für Tische relevant, Zimmer werden selten gemerged)
+    merges = load_merges()
+    if new_tid in merges:
+        partners = merges[new_tid]
+        for partner_id in partners:
+            # Prüfen ob Partner frei ist, wäre hier gut, aber wir erzwingen den Merge meistens.
+            create_reservation(
+                name=f"{r.name} (via {new_tid})",
+                date=r.date,
+                time=r.time,
+                persons=0,
+                table_id=partner_id,
+                info="Automatisch verbunden",
+                shift=r.shift,
+                end_date=r.end_date,
+                parent_id=rid  # WICHTIG: Neue Verlinkung zur Haupt-ID
+            )
+
+    return updated_r
 
 def toggle_arrival_status(reservation_id):
     all_reservations = load_reservations()
@@ -393,3 +541,75 @@ def mark_as_departed(reservation_id):
             return res
     logger.error(f"Reservierung {reservation_id} nicht gefunden, um als gegangen zu markieren.")
     return None
+
+
+def load_merges():
+    """Lädt die Tisch-Verbindungen. Format: {'tisch_id': ['partner_tisch_id', ...]}"""
+    if not os.path.exists(MERGE_FILE): return {}
+    try:
+        with open(MERGE_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return {}
+
+
+def save_merges(merges):
+    dir_n = os.path.dirname(MERGE_FILE)
+    if not os.path.exists(dir_n): os.makedirs(dir_n)
+    with open(MERGE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(merges, f, indent=4)
+
+
+# core/manager.py
+
+def merge_tables(table_ids_list):
+    """
+    Verbindet eine LISTE von Tischen (z.B. ['tisch1', 'tisch2', 'tisch3']).
+    """
+    if len(table_ids_list) < 2: return False
+
+    merges = load_merges()
+
+    # 1. Wir bilden eine große Gruppe aus allen neuen Tischen
+    # UND allen Tischen, die mit diesen bereits verbunden waren.
+    new_group = set(table_ids_list)
+
+    for tid in table_ids_list:
+        if tid in merges:
+            new_group.update(merges[tid])
+
+    # 2. Speichern: Jeder Tisch in der Gruppe kennt alle anderen
+    for member in new_group:
+        partners = list(new_group)
+        if member in partners:
+            partners.remove(member)
+        merges[member] = partners
+
+    save_merges(merges)
+    return True
+
+
+def unmerge_tables(table_ids_list):
+    """
+    Löst eine LISTE von Tischen aus ihren Verbindungen.
+    """
+    if not table_ids_list: return False
+
+    merges = load_merges()
+    changed = False
+
+    for table_id in table_ids_list:
+        if table_id in merges:
+            partners = merges[table_id]
+            # Bei den Partnern diesen Tisch entfernen
+            for p in partners:
+                if p in merges and table_id in merges[p]:
+                    merges[p].remove(table_id)
+            # Eintrag löschen
+            del merges[table_id]
+            changed = True
+
+    if changed:
+        save_merges(merges)
+        return True
+    return False
